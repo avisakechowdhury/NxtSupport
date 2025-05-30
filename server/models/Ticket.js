@@ -1,0 +1,44 @@
+import mongoose from 'mongoose';
+
+const ticketSchema = new mongoose.Schema({
+  ticketNumber: { type: String, required: true, unique: true },
+  companyId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Company',
+    required: true 
+  },
+  subject: { type: String, required: true },
+  body: { type: String, required: true },
+  senderEmail: { type: String, required: true },
+  senderName: { type: String, required: true },
+  gmailMessageId: { type: String, index: true, unique: true, sparse: true },
+  status: { 
+    type: String, 
+    enum: ['new', 'acknowledged', 'inProgress', 'responded', 'escalated', 'resolved', 'closed'],
+    default: 'new'
+  },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high', 'urgent'],
+    default: 'medium'
+  },
+  assignedTo: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User',
+    default: null 
+  },
+  responseText: { type: String, default: null },
+  aiConfidence: { type: Number, default: 0 },
+  originalLanguage: { type: String, default: 'en' },
+  responseGeneratedAt: { type: Date, default: null },
+  escalatedAt: { type: Date, default: null },
+  resolvedAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// *** ADD THIS INDEX (Optional but recommended for performance) ***
+// Ensures faster lookups by companyId and messageId
+ticketSchema.index({ companyId: 1, gmailMessageId: 1 });
+
+export default mongoose.model('Ticket', ticketSchema);
