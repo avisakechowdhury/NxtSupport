@@ -25,10 +25,25 @@ import ticketRoutes from './routes/ticketRoutes.js';
 
 // Middleware
 // Configure CORS to allow your specific frontend and credentials
+const allowedOrigins = [
+    process.env.FRONTEND_URL, // For production (e.g., https://nxtsupport.vercel.app)
+    'http://localhost:5173'  , // For local development
+
+    console.log(process.env.FRONTEND_URL)
+];
+
 const corsOptions = {
-    origin: 'http://localhost:5173', // Your frontend URL
-    credentials: true,             // Allow cookies/credentials
-    optionsSuccessStatus: 200      // For older browsers
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true,
+    optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions)); // Use the *specific* configuration
