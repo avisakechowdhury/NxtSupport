@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import axios from 'axios';
 import { AuthState, User, Company } from '../types';
 
-const API_URL = 'http://localhost:3000/api';
+
+// const API_URL = 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_APP_API_URL || 'https://nxtsupport.onrender.com/api';
+
 
 export const useAuthStore = create<AuthState & {
   login: (email: string, password: string) => Promise<void>;

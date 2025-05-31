@@ -31,6 +31,8 @@ const useAuthStore = (): AuthStore => {
 
   const API_URL_FOR_STORE = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 
+  console.log(API_URL_FOR_STORE, 'Api URL for Store')
+
   const fetchCompanyData = useCallback(async () => {
     if (!authToken) {
         console.log("AuthStore: No auth token, cannot fetch company data.");
@@ -141,6 +143,8 @@ const EmailConnector: React.FC = () => {
   const [fetchEmailsError, setFetchEmailsError] = useState<string>('');
 
   const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
+
+  console.log(API_BASE_URL, 'Api Base URL')
 
   useEffect(() => {
     if (company) {
