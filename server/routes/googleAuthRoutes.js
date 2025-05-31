@@ -5,15 +5,24 @@ import authenticateToken from '../middleware/authenticateToken.js';
 import Sentiment from 'sentiment';
 import Ticket from '../models/Ticket.js';
 import TicketActivity from '../models/TicketActivity.js';
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const router = express.Router();
 
 const sentiment = new Sentiment();
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '726777735775-aen47j3bsc026ss3ccojfsbt9pcfg745.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ;
+const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ;
+const FRONTEND_URL = process.env.FRONTEND_URL;
+
+console.log(GOOGLE_CLIENT_ID);
+console.log(GOOGLE_CLIENT_SECRET);
+console.log(REDIRECT_URI);
+console.log(FRONTEND_URL);
+// console.log(process.env);
 
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
   console.error("FATAL ERROR: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set in environment variables.");
