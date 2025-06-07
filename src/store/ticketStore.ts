@@ -4,6 +4,7 @@ import { Ticket, TicketActivity, TicketsState } from '../types';
 
 const API_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 let pollIntervalId: NodeJS.Timeout | null = null;
+
 export const useTicketStore = create<TicketsState>((set, get) => ({
   tickets: [],
   currentTicket: null,
@@ -38,15 +39,14 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
   },
 
   fetchTicketActivities: async (id: string) => {
-    set({ isLoading: true, error: null });
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_URL}/tickets/${id}/activities`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      set({ activities: response.data, isLoading: false });
+      set({ activities: response.data });
     } catch (error) {
-      set({ error: 'Failed to fetch ticket activities', isLoading: false });
+      set({ error: 'Failed to fetch ticket activities' });
     }
   },
 
@@ -79,7 +79,7 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
       
       set(state => {
         const updatedTickets = state.tickets.map(ticket => 
-          ticket.id === id ? response.data.ticket : ticket
+          ticket._id === id ? response.data.ticket : ticket
         );
         
         return {
@@ -105,7 +105,7 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
       
       set(state => {
         const updatedTickets = state.tickets.map(ticket => 
-          ticket.id === id ? response.data.ticket : ticket
+          ticket._id === id ? response.data.ticket : ticket
         );
         
         return {
@@ -132,7 +132,7 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
       
       set(state => {
         const updatedTickets = state.tickets.map(ticket => 
-          ticket.id === id ? response.data.ticket : ticket
+          ticket._id === id ? response.data.ticket : ticket
         );
         
         return {
@@ -151,15 +151,15 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${API_URL}/tickets/${id}/escalate`,
-        { reason },
+      const response = await axios.patch(
+        `${API_URL}/tickets/${id}/status`,
+        { status: 'escalated', reason },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
       set(state => {
         const updatedTickets = state.tickets.map(ticket => 
-          ticket.id === id ? response.data.ticket : ticket
+          ticket._id === id ? response.data.ticket : ticket
         );
         
         return {
@@ -178,15 +178,15 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${API_URL}/tickets/${id}/resolve`,
-        {},
+      const response = await axios.patch(
+        `${API_URL}/tickets/${id}/status`,
+        { status: 'resolved' },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
       set(state => {
         const updatedTickets = state.tickets.map(ticket => 
-          ticket.id === id ? response.data.ticket : ticket
+          ticket._id === id ? response.data.ticket : ticket
         );
         
         return {
@@ -220,7 +220,28 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
     }
   },
 
- 
+  generateAIResponse: async (id: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/tickets/${id}/generate-response`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      set(state => ({
+        currentTicket: response.data.ticket,
+        tickets: state.tickets.map(ticket => 
+          ticket._id === id ? response.data.ticket : ticket
+        ),
+        isLoading: false
+      }));
+    } catch (error) {
+      set({ error: 'Failed to generate AI response', isLoading: false });
+    }
+  },
+
   startPolling: () => {
     if (pollIntervalId) return; // Prevent multiple intervals
 

@@ -6,6 +6,8 @@ import Sentiment from 'sentiment';
 import Ticket from '../models/Ticket.js';
 import TicketActivity from '../models/TicketActivity.js';
 import dotenv from 'dotenv'
+import axios from 'axios'; // Added for making API requests
+
 
 dotenv.config()
 
@@ -17,11 +19,13 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ;
 const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ;
 const FRONTEND_URL = process.env.FRONTEND_URL;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // <-- Add your Gemini API Key to .env file
 
 console.log(GOOGLE_CLIENT_ID);
 console.log(GOOGLE_CLIENT_SECRET);
 console.log(REDIRECT_URI);
 console.log(FRONTEND_URL);
+console.log(GEMINI_API_KEY);
 // console.log(process.env);
 
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
@@ -35,6 +39,51 @@ const oauth2Client = new google.auth.OAuth2(
   GOOGLE_CLIENT_SECRET,
   REDIRECT_URI
 );
+
+
+// New Function to Analyze Email with Gemini API
+const analyzeEmailWithGemini = async (subject, body) => {
+    // Corrected the model name from 'gemini-1.0-pro' to 'gemini-1.5-flash-latest'
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    
+    // The prompt instructs the model to classify the email and respond with a single word.
+    const prompt = `Analyze the following email text and determine if it is a complaint. Respond with only one word: "Complaint" or "Normal".\n\n---\n\nSubject: ${subject}\n\nBody: ${body}`;
+
+    const payload = {
+        contents: [{
+            parts: [{
+                text: prompt
+            }]
+        }]
+    };
+
+    try {
+        const response = await axios.post(url, payload, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const resultText = response.data.candidates[0].content.parts[0].text.trim();
+        console.log(`Gemini Analysis Result: ${resultText}`); 
+        
+        if (resultText.toLowerCase().includes('complaint')) {
+            return 'Complaint';
+        }
+        return 'Normal';
+
+    } catch (error) {
+        // Updated error logging to be more informative
+        if (error.response) {
+            console.error('Error calling Gemini API:', JSON.stringify(error.response.data, null, 2));
+        } else {
+            console.error('Error setting up Gemini API request:', error.message);
+        }
+        // Fallback to a default value in case of API error
+        return 'Normal'; 
+    }
+};
+
 
 // Initiate Google OAuth flow, protected route
 router.get('/google/initiate', (req, res) => {
@@ -144,8 +193,6 @@ router.get('/google/callback', async (req, res) => {
 
 
 
-
-
 router.get('/google/inbox', authenticateToken, async (req, res) => {
   if (!req.user || !req.user.companyId) {
     return res.status(401).json({ error: 'Authentication with company context required.' });
@@ -194,6 +241,7 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
     const emails = [];
     const supportEmail = company.googleAuth.connectedEmail.toLowerCase(); // Get support email once
 
+    // (Old Method) - Static Keywords for Complaint Detection
     const complaintKeywords = [
       'complaint', 'issue', 'problem', 'not working', 'disappoint', 'unhappy', 'poor',
       'terrible', 'bad service', 'failed', 'error', 'not satisfied', 'dissatisfied',
@@ -201,7 +249,6 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
     ];
 
     for (const message of messages) {
-      let shouldMarkAsRead = true;
       try {
         const msg = await gmail.users.messages.get({
           userId: 'me',
@@ -255,21 +302,37 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
           });
           continue;
         }
+        
+        // --- START OF DETECTION LOGIC ---
 
+        let isComplaint = false;
+
+        // --- METHOD 1: New Gemini API Analysis (Recommended) ---
+        // To use this, uncomment the following lines and comment out METHOD 2.
+        const emailType = await analyzeEmailWithGemini(subjectValue, body);
+        isComplaint = (emailType === 'Complaint');
+        
+        // --- METHOD 2: Original Keyword and Sentiment Analysis ---
+        // This is the old method. To use it, comment out METHOD 1 above.
+        /*
         const subject = subjectValue.toLowerCase();
         const emailBody = (body || snippetValue).toLowerCase();
         const hasComplaintKeyword = complaintKeywords.some(
           (keyword) => subject.includes(keyword) || emailBody.includes(keyword)
         );
-
         const contentToAnalyze = `${subject} ${body || snippetValue}`;
         const sentimentResult = sentiment.analyze(contentToAnalyze);
         const isNegativeSentiment = sentimentResult.score < 0;
-        const isComplaint = hasComplaintKeyword || isNegativeSentiment;
+        isComplaint = hasComplaintKeyword || isNegativeSentiment;
+        */
+       // --- END OF DETECTION LOGIC ---
+
 
         if (isComplaint) {
           const ticketCount = await Ticket.countDocuments({ companyId: req.user.companyId });
           const ticketNumber = `INC${(ticketCount + 1).toString().padStart(6, '0')}`;
+
+          const sentimentResult = sentiment.analyze(`${subjectValue} ${body}`); // Still use sentiment for priority
 
           const ticket = new Ticket({
             ticketNumber,
@@ -281,7 +344,7 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
             gmailMessageId: messageId,
             status: 'acknowledged',
             priority: sentimentResult.score < -5 ? 'high' : sentimentResult.score < -2 ? 'medium' : 'low',
-            aiConfidence: 0.85,
+            aiConfidence: 0.95, // Higher confidence with Gemini
             originalLanguage: 'en',
           });
 
@@ -290,20 +353,11 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
           const activity = new TicketActivity({
             ticketId: ticket._id,
             activityType: 'created',
-            details: 'Ticket created from email complaint',
+            details: 'Ticket created from email complaint (Analyzed by AI)',
           });
           await activity.save();
 
-          const emailContent = `Dear ${ticket.senderName},
-
-Thank you for contacting our support team. This email confirms that we have received your message regarding: "${ticket.subject}".
-
-Your request has been assigned ticket number: ${ticket.ticketNumber}
-
-Our team will review your request and get back to you as soon as possible. You can reply to this email to add more information to your ticket.
-
-Best regards,
-${company.name} Support Team`;
+          const emailContent = `Dear ${ticket.senderName},\n\nThank you for contacting our support team. This email confirms that we have received your message regarding: "${ticket.subject}".\n\nYour request has been assigned ticket number: ${ticket.ticketNumber}\n\nOur team will review your request and get back to you as soon as possible. You can reply to this email to add more information to your ticket.\n\nBest regards,\n${company.name} Support Team`;
 
           const emailLines = [
             'From: "' + company.name + ' Support" <' + company.googleAuth.connectedEmail + '>',
@@ -349,7 +403,7 @@ ${company.name} Support Team`;
             body: body,
             isUnread: isUnread,
             type: 'Normal',
-            sentimentScore: sentimentResult.score,
+            sentimentScore: sentiment.analyze(`${subjectValue} ${body}`).score,
           });
         }
 

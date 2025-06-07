@@ -15,8 +15,8 @@ export const mockTickets: Ticket[] = [
     responseText: null,
     aiConfidence: 0.92,
     originalLanguage: 'en',
-    createdAt: '2023-06-01T10:30:00Z',
-    updatedAt: '2023-06-01T10:30:00Z',
+    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
     responseGeneratedAt: null,
     escalatedAt: null,
     resolvedAt: null
@@ -35,8 +35,8 @@ export const mockTickets: Ticket[] = [
     responseText: null,
     aiConfidence: 0.89,
     originalLanguage: 'en',
-    createdAt: '2023-06-02T14:45:00Z',
-    updatedAt: '2023-06-02T15:15:00Z',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 1.5).toISOString(),
     responseGeneratedAt: null,
     escalatedAt: null,
     resolvedAt: null
@@ -55,10 +55,10 @@ export const mockTickets: Ticket[] = [
     responseText: 'Thank you for bringing this to our attention. We sincerely apologize for the negative experience you had with our customer service. This does not reflect our company values or the level of service we strive to provide. We are escalating this to our customer experience manager who will contact you directly to address your concerns.',
     aiConfidence: 0.76,
     originalLanguage: 'en',
-    createdAt: '2023-06-03T09:20:00Z',
-    updatedAt: '2023-06-03T10:45:00Z',
-    responseGeneratedAt: '2023-06-03T09:45:00Z',
-    escalatedAt: '2023-06-03T10:45:00Z',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    responseGeneratedAt: new Date(Date.now() - 1000 * 60 * 60 * 4.5).toISOString(),
+    escalatedAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
     resolvedAt: null
   },
   {
@@ -75,9 +75,9 @@ export const mockTickets: Ticket[] = [
     responseText: 'We apologize for the delay with your order #45678. After checking our shipping system, we found that there was an unexpected inventory issue that caused this delay. We have expedited your order and it will ship today with priority delivery at no extra cost. We are also adding a 20% discount code to your account for your next purchase as a gesture of goodwill.',
     aiConfidence: 0.94,
     originalLanguage: 'en',
-    createdAt: '2023-06-04T16:10:00Z',
-    updatedAt: '2023-06-04T17:30:00Z',
-    responseGeneratedAt: '2023-06-04T17:30:00Z',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
+    responseGeneratedAt: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
     escalatedAt: null,
     resolvedAt: null
   },
@@ -95,11 +95,11 @@ export const mockTickets: Ticket[] = [
     responseText: 'We sincerely apologize for the delay in processing your refund. After investigating, we found that there was a technical issue with our payment processor that affected a batch of refunds including yours. We have manually processed your refund today and you should see the full amount back in your account within 2-3 business days. We have also added a $25 store credit to your account for the inconvenience caused.',
     aiConfidence: 0.88,
     originalLanguage: 'en',
-    createdAt: '2023-06-05T11:25:00Z',
-    updatedAt: '2023-06-07T09:15:00Z',
-    responseGeneratedAt: '2023-06-05T12:40:00Z',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+    responseGeneratedAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(),
     escalatedAt: null,
-    resolvedAt: '2023-06-07T09:15:00Z'
+    resolvedAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString()
   },
   {
     id: '6',
@@ -115,8 +115,8 @@ export const mockTickets: Ticket[] = [
     responseText: null,
     aiConfidence: 0.91,
     originalLanguage: 'fr',
-    createdAt: '2023-06-06T13:55:00Z',
-    updatedAt: '2023-06-06T14:20:00Z',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 35).toISOString(),
     responseGeneratedAt: null,
     escalatedAt: null,
     resolvedAt: null
@@ -131,7 +131,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Ticket created from customer email',
-    createdAt: '2023-06-01T10:30:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
   },
   {
     id: '102',
@@ -140,7 +140,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Status changed from new to acknowledged',
-    createdAt: '2023-06-01T10:35:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString()
   },
   {
     id: '201',
@@ -149,7 +149,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Ticket created from customer email',
-    createdAt: '2023-06-02T14:45:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
   },
   {
     id: '202',
@@ -158,7 +158,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Status changed from new to acknowledged',
-    createdAt: '2023-06-02T15:15:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1.5).toISOString()
   },
   {
     id: '301',
@@ -167,7 +167,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Ticket created from customer email',
-    createdAt: '2023-06-03T09:20:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString()
   },
   {
     id: '302',
@@ -176,7 +176,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'AI Assistant',
     details: 'AI generated response sent to customer',
-    createdAt: '2023-06-03T09:45:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4.5).toISOString()
   },
   {
     id: '303',
@@ -185,7 +185,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: '1',
     userName: 'John Doe',
     details: 'Escalated: Customer complaint about staff requires manager review',
-    createdAt: '2023-06-03T10:45:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString()
   },
   {
     id: '304',
@@ -194,7 +194,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: '1',
     userName: 'John Doe',
     details: 'Assigned to Support Manager',
-    createdAt: '2023-06-03T10:46:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3.9).toISOString()
   },
   {
     id: '401',
@@ -203,7 +203,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Ticket created from customer email',
-    createdAt: '2023-06-04T16:10:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString()
   },
   {
     id: '402',
@@ -212,7 +212,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Status changed from new to acknowledged',
-    createdAt: '2023-06-04T16:15:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 7.9).toISOString()
   },
   {
     id: '403',
@@ -221,7 +221,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: '1',
     userName: 'John Doe',
     details: 'Assigned to Support Agent',
-    createdAt: '2023-06-04T16:30:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 7.5).toISOString()
   },
   {
     id: '404',
@@ -230,7 +230,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'AI Assistant',
     details: 'AI generated response sent to customer',
-    createdAt: '2023-06-04T17:30:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString()
   },
   {
     id: '501',
@@ -239,7 +239,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Ticket created from customer email',
-    createdAt: '2023-06-05T11:25:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
   },
   {
     id: '502',
@@ -248,7 +248,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Status changed from new to acknowledged',
-    createdAt: '2023-06-05T11:30:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23.9).toISOString()
   },
   {
     id: '503',
@@ -257,7 +257,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: '1',
     userName: 'John Doe',
     details: 'Assigned to Support Agent',
-    createdAt: '2023-06-05T12:15:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23.5).toISOString()
   },
   {
     id: '504',
@@ -266,7 +266,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'AI Assistant',
     details: 'AI generated response sent to customer',
-    createdAt: '2023-06-05T12:40:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString()
   },
   {
     id: '505',
@@ -275,7 +275,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: '4',
     userName: 'Support Agent',
     details: 'Status changed from responded to resolved',
-    createdAt: '2023-06-07T09:15:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString()
   },
   {
     id: '601',
@@ -284,7 +284,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Ticket created from customer email',
-    createdAt: '2023-06-06T13:55:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString()
   },
   {
     id: '602',
@@ -293,7 +293,7 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: null,
     userName: 'System',
     details: 'Status changed from new to acknowledged',
-    createdAt: '2023-06-06T14:00:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 35.9).toISOString()
   },
   {
     id: '603',
@@ -302,6 +302,6 @@ export const mockTicketActivities: TicketActivity[] = [
     userId: '1',
     userName: 'John Doe',
     details: 'Assigned to Tech Support',
-    createdAt: '2023-06-06T14:20:00Z'
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 35.5).toISOString()
   }
 ];

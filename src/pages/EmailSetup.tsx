@@ -3,7 +3,7 @@ import EmailConnector from '../components/EmailSetup/EmailConnector';
 
 const EmailSetup = () => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full">
       <div>
         <h2 className="text-2xl font-bold text-neutral-900 mb-5">Email Integration</h2>
         <p className="text-neutral-500 mb-5">
@@ -11,7 +11,9 @@ const EmailSetup = () => {
         </p>
       </div>
       
-      <EmailConnector />
+      <div className="w-full">
+        <EmailConnector />
+      </div>
       
       <div className="bg-white shadow-card rounded-lg overflow-hidden">
         <div className="p-6">

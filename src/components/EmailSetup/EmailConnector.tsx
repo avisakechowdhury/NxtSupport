@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Mail, AlertCircle, RefreshCw, Inbox, Loader2, Power } from 'lucide-react';
 import axios, { AxiosError } from 'axios';
@@ -278,7 +277,7 @@ const handleGoogleSignIn = async () => {
 
   if (company.googleAuthConnected && company.googleEmail) {
     return (
-      <div className="bg-white shadow-lg rounded-lg overflow-hidden w-full max-w-4xl mx-auto my-8">
+      <div className="bg-white shadow-lg rounded-lg overflow-hidden w-full">
         <div className="p-6 border-b border-neutral-200">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center">
@@ -379,7 +378,7 @@ const handleGoogleSignIn = async () => {
   }
 
   return (
-    <div className="bg-white shadow-xl rounded-lg overflow-hidden w-full max-w-md mx-auto my-8">
+    <div className="bg-white shadow-xl rounded-lg overflow-hidden w-full max-w-md mx-auto">
       <div className="p-8">
         <div className="flex items-center mb-6">
             <Mail className="h-8 w-8 text-primary-600 mr-3" />
@@ -412,36 +411,4 @@ const handleGoogleSignIn = async () => {
   );
 };
 
-const App: React.FC = () => {
-  const style = `
-    body { font-family: 'Inter', sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 16px;}
-    .bg-primary-600 { background-color: #4F46E5; } .hover\\:bg-primary-700:hover { background-color: #4338CA; }
-    .text-primary-600 { color: #4F46E5; }
-    .focus\\:ring-primary-500:focus { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5); }
-    .animate-spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .custom-scrollbar::-webkit-scrollbar { width: 8px; } .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 10px; } .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
-    .text-ellipsis { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .bg-green-100 { background-color: #D1FAE5; } .text-green-600 { color: #059669; }
-    .bg-red-50 { background-color: #FEF2F2; } .border-red-200 { border-color: #FECACA; } .text-red-700 { color: #B91C1C; } .text-red-400 { color: #F87171; } .border-red-500 { border-color: #EF4444; } .bg-red-100 { background-color: #FEE2E2; }
-    .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); } .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
-  `;
-
-  return (
-    <>
-      <style>{style}</style>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      {/* IMPORTANT: Replace the mock useAuthStore with your actual global Zustand store.
-        The EmailConnector component relies on useAuthStore() to get authentication token
-        and company information. The mock provided is for illustration.
-        Your actual store should be provided globally, typically via React Context if not using Zustand's default global nature.
-      */}
-      <EmailConnector />
-    </>
-  );
-};
-
-export default App;
-
-
-
+export default EmailConnector;

@@ -16,6 +16,7 @@ import TicketView from '../pages/TicketView';
 import EmailSetup from '../pages/EmailSetup';
 import Analytics from '../pages/Analytics';
 import Settings from '../pages/Settings';
+import Team from '../pages/Team';
 
 interface ProtectedRouteProps {
   isAuthenticated: boolean;
@@ -39,8 +40,8 @@ const AppRoutes = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard\" replace />} />
+        <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/dashboard\" replace />} />
         
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
           <Route element={<AppLayout />}>
@@ -52,6 +53,7 @@ const AppRoutes = () => {
             <Route path="/email-setup" element={<EmailSetup />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/team" element={<Team />} />
           </Route>
         </Route>
         

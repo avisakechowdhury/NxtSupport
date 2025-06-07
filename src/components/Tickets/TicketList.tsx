@@ -1,243 +1,179 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  AlertCircle,
-} from 'lucide-react';
-import { Ticket } from '../../types';
-import { useTicketStore } from '../../store/ticketStore';
 import { formatDistanceToNow } from 'date-fns';
-
-// Badge utilities
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'new':
-      return <span className="badge bg-primary-100 text-primary-800">New</span>;
-    case 'acknowledged':
-      return <span className="badge bg-neutral-100 text-neutral-800">Acknowledged</span>;
-    case 'inProgress':
-      return <span className="badge bg-primary-100 text-primary-800">In Progress</span>;
-    case 'responded':
-      return <span className="badge bg-success-100 text-success-800">Responded</span>;
-    case 'escalated':
-      return <span className="badge bg-warning-100 text-warning-800">Escalated</span>;
-    case 'resolved':
-      return <span className="badge bg-success-100 text-success-800">Resolved</span>;
-    case 'closed':
-      return <span className="badge bg-neutral-100 text-neutral-800">Closed</span>;
-    default:
-      return <span className="badge bg-neutral-100 text-neutral-800">{status}</span>;
-  }
-};
-
-const getPriorityBadge = (priority: string) => {
-  switch (priority) {
-    case 'low':
-      return (
-        <div className="flex items-center">
-          <div className="h-2 w-2 rounded-full bg-neutral-400 mr-2"></div>
-          <span className="text-xs text-neutral-500">Low</span>
-        </div>
-      );
-    case 'medium':
-      return (
-        <div className="flex items-center">
-          <div className="h-2 w-2 rounded-full bg-primary-500 mr-2"></div>
-          <span className="text-xs text-neutral-500">Medium</span>
-        </div>
-      );
-    case 'high':
-      return (
-        <div className="flex items-center">
-          <div className="h-2 w-2 rounded-full bg-warning-500 mr-2"></div>
-          <span className="text-xs text-warning-700">High</span>
-        </div>
-      );
-    case 'urgent':
-      return (
-        <div className="flex items-center">
-          <div className="h-2 w-2 rounded-full bg-error-500 mr-2"></div>
-          <span className="text-xs text-error-700">Urgent</span>
-        </div>
-      );
-    default:
-      return (
-        <div className="flex items-center">
-          <div className="h-2 w-2 rounded-full bg-neutral-400 mr-2"></div>
-          <span className="text-xs text-neutral-500">{priority}</span>
-        </div>
-      );
-  }
-};
+import { useTicketStore } from '../../store/ticketStore';
+import { 
+  MessageSquare, 
+  Clock, 
+  AlertTriangle, 
+  CheckCircle,
+  User
+} from 'lucide-react';
 
 const TicketList = () => {
-  const { tickets, fetchTickets, isLoading } = useTicketStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-  const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
-
-  const getFilterFromPath = () => {
-    const path = location.pathname;
-    if (path.includes('/tickets/new')) return 'new';
-    if (path.includes('/tickets/escalated')) return 'escalated';
-    return null;
-  };
+  const { tickets, fetchTickets, startPolling, stopPolling, isLoading } = useTicketStore();
 
   useEffect(() => {
     fetchTickets();
-    setSelectedStatus(getFilterFromPath());
-  }, [fetchTickets, location.pathname]);
+    startPolling();
+    return () => stopPolling();
+  }, [fetchTickets, startPolling, stopPolling]);
 
-  useEffect(() => {
-    let filtered = [...tickets];
-
-    const statusFilter = selectedStatus || getFilterFromPath();
-    if (statusFilter) {
-      if (statusFilter === 'new') {
-        filtered = filtered.filter(
-          (t) => t.status === 'new' || t.status === 'acknowledged'
-        );
-      } else {
-        filtered = filtered.filter((t) => t.status === statusFilter);
-      }
+  // Filter tickets based on the current route
+  const filteredTickets = React.useMemo(() => {
+    if (location.pathname === '/tickets/escalated') {
+      return tickets.filter(ticket => ticket.status === 'escalated');
     }
+    return tickets;
+  }, [tickets, location.pathname]);
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (t) =>
-          t.subject.toLowerCase().includes(term) ||
-          t.senderEmail.toLowerCase().includes(term) ||
-          t.senderName.toLowerCase().includes(term) ||
-          t.body.toLowerCase().includes(term)
-      );
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'new':
+        return <Clock className="h-5 w-5 text-neutral-500" />;
+      case 'acknowledged':
+        return <MessageSquare className="h-5 w-5 text-primary-500" />;
+      case 'inProgress':
+        return <User className="h-5 w-5 text-primary-500" />;
+      case 'escalated':
+        return <AlertTriangle className="h-5 w-5 text-warning-500" />;
+      case 'resolved':
+        return <CheckCircle className="h-5 w-5 text-success-500" />;
+      default:
+        return <Clock className="h-5 w-5 text-neutral-500" />;
     }
-
-    filtered.sort(
-      (a, b) =>
-        new Date(b.responseGeneratedAt || 0).getTime() -
-        new Date(a.responseGeneratedAt || 0).getTime()
-    );
-
-    setFilteredTickets(filtered);
-  }, [tickets, searchTerm, selectedStatus, location.pathname]);
-
-  const handleViewTicket = (id: string) => {
-    navigate(`/tickets/${id}`);
   };
 
-  return (
-    <div className="bg-white shadow-card rounded-lg overflow-hidden">
-      <div className="p-6 border-b border-neutral-200">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
-          <h2 className="text-lg font-medium text-neutral-900 mb-4 sm:mb-0">
-            {selectedStatus
-              ? `${selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)} Tickets`
-              : 'All Tickets'}
-          </h2>
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'new':
+        return 'bg-neutral-100 text-neutral-800';
+      case 'acknowledged':
+        return 'bg-primary-100 text-primary-800';
+      case 'inProgress':
+        return 'bg-primary-100 text-primary-800';
+      case 'escalated':
+        return 'bg-warning-100 text-warning-800';
+      case 'resolved':
+        return 'bg-success-100 text-success-800';
+      default:
+        return 'bg-neutral-100 text-neutral-800';
+    }
+  };
 
-          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-            <div className="relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-neutral-400" />
-              </div>
-              <input
-                type="text"
-                className="block w-full pl-10 sm:text-sm border-neutral-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                placeholder="Search tickets..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'urgent':
+        return 'bg-error-100 text-error-800';
+      case 'high':
+        return 'bg-warning-100 text-warning-800';
+      case 'medium':
+        return 'bg-primary-100 text-primary-800';
+      case 'low':
+        return 'bg-success-100 text-success-800';
+      default:
+        return 'bg-neutral-100 text-neutral-800';
+    }
+  };
 
-            <select
-              className="block w-full pl-3 pr-10 py-2 text-base border-neutral-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
-              value={selectedStatus || ''}
-              onChange={(e) => setSelectedStatus(e.target.value || null)}
-            >
-              <option value="">All Statuses</option>
-              <option value="new">New</option>
-              <option value="acknowledged">Acknowledged</option>
-              <option value="inProgress">In Progress</option>
-              <option value="responded">Responded</option>
-              <option value="escalated">Escalated</option>
-              <option value="resolved">Resolved</option>
-            </select>
-          </div>
-        </div>
+  if (isLoading && filteredTickets.length === 0) {
+    return (
+      <div className="p-8 text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+        <p className="mt-2 text-neutral-500">Loading tickets...</p>
       </div>
+    );
+  }
 
-      {isLoading ? (
-        <div className="p-12 text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
-          <p className="mt-2 text-neutral-500">Loading tickets...</p>
-        </div>
-      ) : filteredTickets.length === 0 ? (
-        <div className="p-12 text-center">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100">
-            <AlertCircle className="h-6 w-6 text-neutral-600" />
-          </div>
-          <h3 className="mt-3 text-sm font-medium text-neutral-900">No tickets found</h3>
-          <p className="mt-2 text-sm text-neutral-500">
-            {searchTerm
-              ? 'No tickets match your search criteria.'
-              : "You don't have any tickets in this category."}
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-neutral-200">
-            <thead className="bg-neutral-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                  Ticket
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                  Priority
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                  Date
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-neutral-200">
-              {filteredTickets.map((ticket) => (
-                <tr
-                  key={ticket._id}
-                  className="hover:bg-neutral-50 cursor-pointer"
-                  onClick={() => handleViewTicket(ticket._id)}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-neutral-900">{ticket.ticketNumber}</div>
-                    <div className="text-sm text-neutral-500 truncate max-w-xs">{ticket.subject}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-neutral-900">{ticket.senderName}</div>
-                    <div className="text-sm text-neutral-500">{ticket.senderEmail}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(ticket.status)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{getPriorityBadge(ticket.priority)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">
-                    {ticket.responseGeneratedAt
+  if (filteredTickets.length === 0) {
+    return (
+      <div className="p-8 text-center">
+        <MessageSquare className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-neutral-900 mb-2">No tickets found</h3>
+        <p className="text-neutral-500">
+          {location.pathname === '/tickets/escalated' 
+            ? 'There are no escalated tickets at the moment.'
+            : 'There are no tickets to display at the moment.'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-neutral-200">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                Ticket
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                Priority
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                Assigned To
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                Last Updated
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {filteredTickets.map((ticket) => (
+              <tr 
+                key={ticket._id} 
+                className="hover:bg-neutral-50 cursor-pointer"
+                onClick={() => navigate(`/tickets/${ticket._id}`)}
+              >
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      {getStatusIcon(ticket.status)}
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-neutral-900">
+                        {ticket.ticketNumber}
+                      </div>
+                      <div className="text-sm text-neutral-500">
+                        {ticket.subject}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}>
+                    {getStatusIcon(ticket.status)}
+                    <span className="ml-1 capitalize">{ticket.status}</span>
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(ticket.priority)}`}>
+                    {ticket.priority}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">
+                  {ticket.assignedTo && typeof ticket.assignedTo === 'object' 
+                    ? ticket.assignedTo.name 
+                    : 'Unassigned'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">
+                  {ticket.status === 'new' || ticket.status === 'acknowledged'
+                    ? `${formatDistanceToNow(new Date(ticket.createdAt))} ago`
+                    : ticket.responseGeneratedAt
                       ? `${formatDistanceToNow(new Date(ticket.responseGeneratedAt))} ago`
                       : 'Unknown'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

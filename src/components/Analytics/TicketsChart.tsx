@@ -13,7 +13,8 @@ import {
   ChartOptions
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
-import { mockDashboardStats } from '../../mocks/statsData';
+import { useTicketStore } from '../../store/ticketStore';
+import { format, subDays, startOfDay } from 'date-fns';
 
 ChartJS.register(
   CategoryScale,
@@ -27,14 +28,36 @@ ChartJS.register(
 );
 
 const TicketsLineChart = () => {
-  const { ticketsByDay } = mockDashboardStats;
+  const { tickets } = useTicketStore();
+  
+  // Generate data for the last 7 days
+  const generateTicketsByDay = () => {
+    const days = [];
+    const counts = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = startOfDay(subDays(new Date(), i));
+      const dateStr = format(date, 'MM-dd');
+      const count = tickets.filter(ticket => {
+        const ticketDate = startOfDay(new Date(ticket.createdAt));
+        return ticketDate.getTime() === date.getTime();
+      }).length;
+      
+      days.push(dateStr);
+      counts.push(count);
+    }
+    
+    return { days, counts };
+  };
+
+  const { days, counts } = generateTicketsByDay();
   
   const data: ChartData<'line'> = {
-    labels: ticketsByDay.map(item => item.date.substring(5)),
+    labels: days,
     datasets: [
       {
         label: 'Tickets',
-        data: ticketsByDay.map(item => item.count),
+        data: counts,
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59, 130, 246, 0.5)',
         tension: 0.3,
@@ -73,7 +96,14 @@ const TicketsLineChart = () => {
 };
 
 const TicketsPriorityChart = () => {
-  const { ticketsByPriority } = mockDashboardStats;
+  const { tickets } = useTicketStore();
+  
+  const priorityCounts = {
+    low: tickets.filter(t => t.priority === 'low').length,
+    medium: tickets.filter(t => t.priority === 'medium').length,
+    high: tickets.filter(t => t.priority === 'high').length,
+    urgent: tickets.filter(t => t.priority === 'urgent').length
+  };
   
   const data: ChartData<'bar'> = {
     labels: ['Low', 'Medium', 'High', 'Urgent'],
@@ -81,10 +111,10 @@ const TicketsPriorityChart = () => {
       {
         label: 'Tickets by Priority',
         data: [
-          ticketsByPriority.low,
-          ticketsByPriority.medium,
-          ticketsByPriority.high,
-          ticketsByPriority.urgent
+          priorityCounts.low,
+          priorityCounts.medium,
+          priorityCounts.high,
+          priorityCounts.urgent
         ],
         backgroundColor: [
           'rgba(156, 163, 175, 0.7)',

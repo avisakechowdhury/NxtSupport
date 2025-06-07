@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useTicketStore } from '../../store/ticketStore';
+import { useTeamStore } from '../../store/teamStore';
 import { TicketActivity } from '../../types';
 
 const TicketDetail = () => {
@@ -30,6 +31,9 @@ const TicketDetail = () => {
     isLoading 
   } = useTicketStore();
   
+  const { members, fetchTeamMembers } = useTeamStore();
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedMember, setSelectedMember] = useState('');
   const [escalationReason, setEscalationReason] = useState('');
   const [showEscalateForm, setShowEscalateForm] = useState(false);
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
@@ -39,8 +43,9 @@ const TicketDetail = () => {
     if (id) {
       fetchTicketById(id);
       fetchTicketActivities(id);
+      fetchTeamMembers();
     }
-  }, [id, fetchTicketById, fetchTicketActivities]);
+  }, [id, fetchTicketById, fetchTicketActivities, fetchTeamMembers]);
 
   const handleGenerateResponse = async () => {
     if (!id) return;
@@ -49,7 +54,6 @@ const TicketDetail = () => {
     await generateAIResponse(id);
     setIsGeneratingResponse(false);
     
-    // Set a random confidence level between 75% and 98%
     setResponseConfidence(Math.floor(Math.random() * 23) + 75);
   };
 
@@ -69,9 +73,10 @@ const TicketDetail = () => {
   };
 
   const handleAssign = async () => {
-    if (!id) return;
-    // In a real app, you would show a user selector
-    await assignTicket(id, '3');
+    if (!id || !selectedMember) return;
+    await assignTicket(id, selectedMember);
+    setShowAssignModal(false);
+    setSelectedMember('');
   };
 
   if (isLoading || !currentTicket) {
@@ -122,7 +127,7 @@ const TicketDetail = () => {
             {!currentTicket.assignedTo && (
               <button
                 className="inline-flex items-center px-3 py-1.5 border border-neutral-300 text-xs font-medium rounded text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                onClick={handleAssign}
+                onClick={() => setShowAssignModal(true)}
               >
                 <User className="h-4 w-4 mr-1" />
                 Assign
@@ -131,6 +136,49 @@ const TicketDetail = () => {
           </div>
         </div>
       </div>
+      
+      {/* Assignment Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-neutral-900 mb-4">Assign Ticket</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Select Team Member
+              </label>
+              <select
+                value={selectedMember}
+                onChange={(e) => setSelectedMember(e.target.value)}
+                className="block w-full rounded-md border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              >
+                <option value="">Select a team member</option>
+                {members.map((member) => (
+                  <option key={member._id} value={member._id}>
+                    {member.name} ({member.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(false)}
+                className="px-4 py-2 border border-neutral-300 rounded-md text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAssign}
+                disabled={!selectedMember}
+                className="px-4 py-2 border border-transparent rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

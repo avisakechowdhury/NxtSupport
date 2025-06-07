@@ -28,7 +28,7 @@ const LoginForm = () => {
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-neutral-900">
-          Responder AI
+          NxtMail - AI agent for email
         </h2>
         <p className="mt-2 text-center text-sm text-neutral-600">
           Sign in to your account

@@ -5,6 +5,7 @@ const TicketsEscalated = () => {
   return (
     <div>
       <TicketList />
+      
     </div>
   );
 };

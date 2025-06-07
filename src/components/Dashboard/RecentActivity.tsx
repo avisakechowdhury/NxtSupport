@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   CheckCircle, 
@@ -8,7 +8,7 @@ import {
   Clock,
   PlusCircle
 } from 'lucide-react';
-import { mockTicketActivities } from '../../mocks/ticketData';
+import { useTicketStore } from '../../store/ticketStore';
 
 const ActivityIcon = ({ type }: { type: string }) => {
   switch (type) {
@@ -30,10 +30,24 @@ const ActivityIcon = ({ type }: { type: string }) => {
 };
 
 const RecentActivity = () => {
+  const { tickets, fetchTickets, startPolling, stopPolling } = useTicketStore();
+
+  useEffect(() => {
+    fetchTickets();
+    startPolling();
+    return () => stopPolling();
+  }, [fetchTickets, startPolling, stopPolling]);
+
+  // Get all activities from tickets and sort by date
+  const allActivities = tickets.flatMap(ticket => 
+    ticket.activities?.map(activity => ({
+      ...activity,
+      ticketId: ticket.ticketNumber
+    })) || []
+  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
   // Get 10 most recent activities
-  const recentActivities = [...mockTicketActivities]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10);
+  const recentActivities = allActivities.slice(0, 10);
 
   return (
     <div className="bg-white shadow-card rounded-lg overflow-hidden">
@@ -44,7 +58,7 @@ const RecentActivity = () => {
       <div className="border-t border-neutral-200">
         <ul className="divide-y divide-neutral-200">
           {recentActivities.map((activity) => (
-            <li key={activity.id} className="p-4 hover:bg-neutral-50 transition-colors">
+            <li key={activity._id} className="p-4 hover:bg-neutral-50 transition-colors">
               <div className="flex items-start">
                 <div className="flex-shrink-0 pt-1">
                   <ActivityIcon type={activity.activityType} />
@@ -69,7 +83,7 @@ const RecentActivity = () => {
         </ul>
       </div>
       <div className="border-t border-neutral-200 p-4">
-        <a href="#" className="text-sm font-medium text-primary-600 hover:text-primary-500">
+        <a href="/tickets" className="text-sm font-medium text-primary-600 hover:text-primary-500">
           View all activity
         </a>
       </div>

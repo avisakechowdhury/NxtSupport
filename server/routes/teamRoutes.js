@@ -55,4 +55,44 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Update team member
+router.patch('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, email, role } = req.body;
+    
+    // Check if user exists and belongs to the company
+    const user = await User.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Team member not found' });
+    }
+
+    // If email is being changed, check if it's already in use
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already in use' });
+      }
+    }
+
+    // Update user fields
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (role) user.role = role;
+
+    await user.save();
+    
+    // Return updated user without password
+    const updatedUser = user.toObject();
+    delete updatedUser.password;
+    
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update team member' });
+  }
+});
+
 export default router;

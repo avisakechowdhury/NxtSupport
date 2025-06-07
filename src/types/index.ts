@@ -1,5 +1,6 @@
 export interface User {
-  id: string;
+  _id: string;
+  id?: string;
   email: string;
   name: string;
   role: 'admin' | 'agent' | 'viewer';
@@ -7,25 +8,30 @@ export interface User {
 }
 
 export interface Company {
-  id: string;
+  _id: string;
+  id?: string;
   name: string;
   domain: string;
   supportEmail: string;
-  emailProvider: 'gmail' | 'custom' | 'office365';
+  emailProvider?: 'gmail' | 'custom' | 'office365';
   emailConnected: boolean;
+  googleAuthConnected?: boolean;
+  googleEmail?: string | null;
 }
 
 export interface Ticket {
-  id: string;
+  _id: string;
+  id?: string;
   ticketNumber: string;
   companyId: string;
   subject: string;
   body: string;
   senderEmail: string;
   senderName: string;
+  gmailMessageId?: string;
   status: 'new' | 'acknowledged' | 'inProgress' | 'responded' | 'escalated' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  assignedTo: string | null;
+  assignedTo: { _id: string; name: string; email: string } | null;
   responseText: string | null;
   aiConfidence: number;
   originalLanguage: string;
@@ -37,7 +43,8 @@ export interface Ticket {
 }
 
 export interface TicketActivity {
-  id: string;
+  _id: string;
+  id?: string;
   ticketId: string;
   activityType: 'created' | 'statusChanged' | 'responded' | 'escalated' | 'assigned' | 'note';
   userId: string | null;
@@ -78,7 +85,9 @@ export interface TicketsState {
   escalateTicket: (id: string, reason: string) => Promise<void>;
   resolveTicket: (id: string) => Promise<void>;
   addNote: (id: string, note: string) => Promise<void>;
-  startPolling: () => () => void;
+  generateAIResponse: (id: string) => Promise<void>;
+  startPolling: () => void;
+  stopPolling: () => void;
 }
 
 export interface DashboardStats {

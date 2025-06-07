@@ -10,14 +10,18 @@ import {
   Settings, 
   Mail,
   ChevronDown,
-  Menu
+  X
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
-const Sidebar = () => {
+interface SidebarProps {
+  isMobileMenuOpen?: boolean;
+  onMobileMenuClose?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isMobileMenuOpen, onMobileMenuClose }) => {
   const { user } = useAuthStore();
   const [openMenus, setOpenMenus] = useState<string[]>(['tickets']);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const toggleMenu = (menu: string) => {
     if (openMenus.includes(menu)) {
@@ -29,38 +33,40 @@ const Sidebar = () => {
 
   const isAdmin = user?.role === 'admin';
 
-  // Add mobile menu toggle handler
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
+  const handleNavClick = () => {
+    if (onMobileMenuClose) {
+      onMobileMenuClose();
+    }
   };
 
-  // Add mobile menu class
+  // Sidebar classes for mobile responsiveness
   const sidebarClasses = `${
     isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
   } md:translate-x-0 fixed md:static inset-y-0 left-0 z-30 w-64 bg-neutral-900 text-neutral-100 transform transition-transform duration-200 ease-in-out md:transform-none`;
 
   return (
     <>
-      {/* Mobile menu button */}
-      <button
-        className="md:hidden fixed top-4 left-4 z-40 p-2 rounded-md bg-neutral-900 text-white"
-        onClick={toggleMobileMenu}
-      >
-        <Menu className="h-6 w-6" />
-      </button>
-
       {/* Overlay for mobile */}
       {isMobileMenuOpen && (
         <div
           className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-20"
-          onClick={() => setIsMobileMenuOpen(false)}
+          onClick={onMobileMenuClose}
         />
       )}
 
       <aside className={sidebarClasses}>
-        <div className="p-5 border-b border-neutral-800 flex items-center">
-          <Mail className="h-6 w-6 text-primary-400 mr-2" />
-          <h1 className="text-xl font-semibold">Responder AI</h1>
+        <div className="p-5 border-b border-neutral-800 flex items-center justify-between">
+          <div className="flex items-center">
+            <Mail className="h-6 w-6 text-primary-400 mr-2" />
+            <h1 className="text-xl font-semibold">NxtMail</h1>
+          </div>
+          {/* Close button for mobile */}
+          <button
+            className="md:hidden p-1 rounded-md hover:bg-neutral-800"
+            onClick={onMobileMenuClose}
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
         
         <nav className="flex-1 overflow-y-auto py-4">
@@ -68,6 +74,7 @@ const Sidebar = () => {
             <li>
               <NavLink 
                 to="/dashboard" 
+                onClick={handleNavClick}
                 className={({ isActive }) => 
                   `flex items-center px-5 py-2.5 text-sm font-medium rounded-sm mx-2 ${
                     isActive 
@@ -109,6 +116,7 @@ const Sidebar = () => {
                     <li>
                       <NavLink 
                         to="/tickets/all" 
+                        onClick={handleNavClick}
                         className={({ isActive }) => 
                           `block py-2 text-sm ${
                             isActive 
@@ -123,6 +131,7 @@ const Sidebar = () => {
                     <li>
                       <NavLink 
                         to="/tickets/new" 
+                        onClick={handleNavClick}
                         className={({ isActive }) => 
                           `block py-2 text-sm ${
                             isActive 
@@ -137,6 +146,7 @@ const Sidebar = () => {
                     <li>
                       <NavLink 
                         to="/tickets/escalated" 
+                        onClick={handleNavClick}
                         className={({ isActive }) => 
                           `block py-2 text-sm ${
                             isActive 
@@ -156,6 +166,7 @@ const Sidebar = () => {
             <li>
               <NavLink 
                 to="/email-setup" 
+                onClick={handleNavClick}
                 className={({ isActive }) => 
                   `flex items-center px-5 py-2.5 text-sm font-medium rounded-sm mx-2 ${
                     isActive 
@@ -172,6 +183,7 @@ const Sidebar = () => {
             <li>
               <NavLink 
                 to="/analytics" 
+                onClick={handleNavClick}
                 className={({ isActive }) => 
                   `flex items-center px-5 py-2.5 text-sm font-medium rounded-sm mx-2 ${
                     isActive 
@@ -198,6 +210,7 @@ const Sidebar = () => {
                 <li>
                   <NavLink 
                     to="/team" 
+                    onClick={handleNavClick}
                     className={({ isActive }) => 
                       `flex items-center px-5 py-2.5 text-sm font-medium rounded-sm mx-2 ${
                         isActive 
@@ -214,6 +227,7 @@ const Sidebar = () => {
                 <li>
                   <NavLink 
                     to="/settings" 
+                    onClick={handleNavClick}
                     className={({ isActive }) => 
                       `flex items-center px-5 py-2.5 text-sm font-medium rounded-sm mx-2 ${
                         isActive 

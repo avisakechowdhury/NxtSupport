@@ -18,10 +18,8 @@ const app = express();
 
 // Import routes
 import googleAuthRoutes from './routes/googleAuthRoutes.js'; // Import the new Google Auth routes
-
 import ticketRoutes from './routes/ticketRoutes.js';
-
-
+import teamRoutes from './routes/teamRoutes.js';
 
 // Middleware
 // Configure CORS to allow your specific frontend and credentials
@@ -83,7 +81,7 @@ app.use('/api/auth', googleAuthRoutes); // ✅ Register public routes first
 app.use('/api/auth/protected', authenticateToken, googleAuthRoutes); // ✅ For protected ones
 
 app.use('/api/tickets', ticketRoutes);
-
+app.use('/api/team', teamRoutes);
 
 // Auth routes (your existing ones)
 app.post('/api/auth/register', async (req, res) => {
