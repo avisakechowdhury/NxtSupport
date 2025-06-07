@@ -1,0 +1,25 @@
+{
+  "name": "ai-email-support-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.18.2",
+    "googleapis": "^133.0.0",
+    "imap": "^0.8.19",
+    "imap-simple": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mailparser": "^3.6.9",
+    "mongoose": "^8.1.1",
+    "nodemailer": "^6.9.12",
+    "sentiment": "^5.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

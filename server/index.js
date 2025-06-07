@@ -29,7 +29,7 @@ const allowedOrigins = [
     process.env.FRONTEND_URL, // For production (e.g., https://nxtsupport.vercel.app)
     'http://localhost:5173'  , // For local development
 
-    console.log(process.env.FRONTEND_URL)
+    // console.log(process.env.FRONTEND_URL)
 ];
 
 const corsOptions = {

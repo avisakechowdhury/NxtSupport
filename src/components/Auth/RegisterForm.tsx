@@ -58,7 +58,7 @@ const RegisterForm = () => {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="company-name" className="block text-sm font-medium text-neutral-700">
-                Company name
+                Company Name
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -72,14 +72,14 @@ const RegisterForm = () => {
                   onChange={(e) => setCompanyName(e.target.value)}
                   required
                   className="block w-full pl-10 sm:text-sm border-neutral-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Acme Inc."
+                  placeholder="Nxt Mail"
                 />
               </div>
             </div>
 
             <div>
               <label htmlFor="domain" className="block text-sm font-medium text-neutral-700">
-                Company website
+                Company Website
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <input
@@ -90,14 +90,14 @@ const RegisterForm = () => {
                   onChange={(e) => setDomain(e.target.value)}
                   required
                   className="block w-full sm:text-sm border-neutral-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="www.acme.com"
+                  placeholder="www.example.com"
                 />
               </div>
             </div>
 
             <div>
               <label htmlFor="support-email" className="block text-sm font-medium text-neutral-700">
-                Support email address
+                Email
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -111,17 +111,17 @@ const RegisterForm = () => {
                   onChange={(e) => setSupportEmail(e.target.value)}
                   required
                   className="block w-full pl-10 sm:text-sm border-neutral-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="support@acme.com"
+                  placeholder="support@example.com"
                 />
               </div>
-              <p className="mt-1 text-sm text-neutral-500">
+              {/* <p className="mt-1 text-sm text-neutral-500">
                 This email will be used for your admin account
-              </p>
+              </p> */}
             </div>
 
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-neutral-700">
-                Your name
+                Your Name
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
