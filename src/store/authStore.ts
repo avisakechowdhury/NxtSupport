@@ -2,16 +2,15 @@ import { create } from 'zustand';
 import axios from 'axios';
 import { AuthState, User, Company } from '../types';
 
-
-// const API_URL = 'http://localhost:3000/api';
-const API_URL = import.meta.env.VITE_APP_API_URL || 'https://nxtsupport.onrender.com/api';
-
+const API_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 
 export const useAuthStore = create<AuthState & {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (company: Partial<Company>, admin: Partial<User>, password: string) => Promise<void>;
+  registerPersonal: (userData: { name: string; email: string; password: string }) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
+  setCompanyAuthStatus: (status: { googleAuthConnected: boolean; googleEmail: string | null; emailConnectedOverall: boolean }) => void;
 }>((set) => ({
   user: null,
   company: null,
@@ -45,6 +44,7 @@ export const useAuthStore = create<AuthState & {
         isLoading: false,
         isAuthenticated: false
       });
+      throw error;
     }
   },
 
@@ -85,6 +85,33 @@ export const useAuthStore = create<AuthState & {
         isLoading: false,
         isAuthenticated: false
       });
+      throw error;
+    }
+  },
+
+  registerPersonal: async (userData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await axios.post(`${API_URL}/auth/register/personal`, userData);
+      
+      const { token, user } = response.data;
+      
+      localStorage.setItem('token', token);
+      set({ 
+        user, 
+        company: null, // Personal accounts don't have companies
+        token, 
+        isAuthenticated: true, 
+        isLoading: false,
+        error: null
+      });
+    } catch (error) {
+      set({ 
+        error: error.response?.data?.error || 'Registration failed', 
+        isLoading: false,
+        isAuthenticated: false
+      });
+      throw error;
     }
   },
 
@@ -102,6 +129,16 @@ export const useAuthStore = create<AuthState & {
       });
       
       const { user, company } = response.data;
+      
+      // For personal users, add email connection status from their profile
+      if (user.accountType === 'personal') {
+        const personalResponse = await axios.get(`${API_URL}/auth/me/personal`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const personalUser = personalResponse.data.user;
+        user.emailConnected = personalUser.emailConnected;
+        user.googleEmail = personalUser.googleEmail;
+      }
       
       set({ 
         user, 
@@ -121,5 +158,16 @@ export const useAuthStore = create<AuthState & {
         error: null
       });
     }
+  },
+
+  setCompanyAuthStatus: (status) => {
+    set(state => ({
+      company: state.company ? {
+        ...state.company,
+        googleAuthConnected: status.googleAuthConnected,
+        googleEmail: status.googleEmail,
+        emailConnected: status.emailConnectedOverall
+      } : null
+    }));
   }
 }));

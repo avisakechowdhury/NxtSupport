@@ -3,8 +3,11 @@ export interface User {
   id?: string;
   email: string;
   name: string;
-  role: 'admin' | 'agent' | 'viewer';
-  companyId: string;
+  role?: 'admin' | 'agent' | 'viewer';
+  companyId?: string;
+  accountType?: 'business' | 'personal';
+  emailConnected?: boolean;
+  googleEmail?: string | null;
 }
 
 export interface Company {
@@ -31,7 +34,7 @@ export interface Ticket {
   gmailMessageId?: string;
   status: 'new' | 'acknowledged' | 'inProgress' | 'responded' | 'escalated' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  assignedTo: { _id: string; name: string; email: string } | null;
+  assignedTo: string | null;
   responseText: string | null;
   aiConfidence: number;
   originalLanguage: string;
@@ -40,6 +43,7 @@ export interface Ticket {
   responseGeneratedAt: string | null;
   escalatedAt: string | null;
   resolvedAt: string | null;
+  activities?: TicketActivity[];
 }
 
 export interface TicketActivity {
@@ -107,4 +111,24 @@ export interface DashboardStats {
     date: string;
     count: number;
   }[];
+}
+
+// Personal Email Types
+export interface PersonalEmail {
+  id: string;
+  from: string;
+  subject: string;
+  preview: string;
+  time: string;
+  category: string;
+  isRead: boolean;
+  isStarred: boolean;
+  labels: string[];
+}
+
+export interface PersonalEmailStats {
+  totalEmails: number;
+  importantEmails: number;
+  processedEmails: number;
+  timeSaved: string;
 }

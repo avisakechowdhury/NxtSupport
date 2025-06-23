@@ -36,11 +36,11 @@ const RegisterForm = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="h-12 w-12 rounded-full bg-primary-100 flex items-center justify-center">
-            <Mail className="h-6 w-6 text-primary-600" />
+            <Building className="h-6 w-6 text-primary-600" />
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-neutral-900">
-          Create your account
+          Create your business account
         </h2>
         <p className="mt-2 text-center text-sm text-neutral-600">
           Set up AI-powered email support for your business
@@ -50,7 +50,7 @@ const RegisterForm = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           {error && (
-            <div className="mb-4 bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded relative" role="alert">
+            <div className="mb-4 bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded relative\" role="alert">
               <span className="block sm:inline">{error}</span>
             </div>
           )}
@@ -114,9 +114,6 @@ const RegisterForm = () => {
                   placeholder="support@example.com"
                 />
               </div>
-              {/* <p className="mt-1 text-sm text-neutral-500">
-                This email will be used for your admin account
-              </p> */}
             </div>
 
             <div>
@@ -199,6 +196,12 @@ const RegisterForm = () => {
                 Already have an account?{' '}
                 <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
                   Sign in
+                </Link>
+              </p>
+              <p className="mt-2 text-sm text-neutral-600">
+                Need a personal account?{' '}
+                <Link to="/register/personal" className="font-medium text-purple-600 hover:text-purple-500">
+                  Sign up for personal
                 </Link>
               </p>
             </div>

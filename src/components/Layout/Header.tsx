@@ -11,26 +11,23 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
   const { user, logout, company } = useAuthStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showUserMenu || showMobileMenu) {
+      if (showUserMenu) {
         const target = event.target as HTMLElement;
         if (!target.closest('.menu-container')) {
           setShowUserMenu(false);
-          setShowMobileMenu(false);
         }
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showUserMenu, showMobileMenu]);
+  }, [showUserMenu]);
 
   const handleMobileMenuToggle = () => {
-    setShowMobileMenu(!showMobileMenu);
     if (onMobileMenuToggle) {
       onMobileMenuToggle();
     }
@@ -118,16 +115,14 @@ const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle, isMobileMenuOpen })
                 >
                   Profile
                 </Link>
-                <button 
-                  onClick={() => {
-                    logout();
-                    setShowUserMenu(false);
-                  }}
+                <Link
+                  to="/logout"
                   className="flex items-center w-full text-left px-4 py-2 text-sm text-error-600 hover:bg-neutral-100"
+                  onClick={() => setShowUserMenu(false)}
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout
-                </button>
+                </Link>
               </div>
             )}
           </div>

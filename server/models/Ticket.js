@@ -11,7 +11,7 @@ const ticketSchema = new mongoose.Schema({
   body: { type: String, required: true },
   senderEmail: { type: String, required: true },
   senderName: { type: String, required: true },
-  gmailMessageId: { type: String, index: true, unique: true, sparse: true },
+  gmailMessageId: { type: String, sparse: true },
   status: { 
     type: String, 
     enum: ['new', 'acknowledged', 'inProgress', 'responded', 'escalated', 'resolved', 'closed'],
@@ -37,8 +37,7 @@ const ticketSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// *** ADD THIS INDEX (Optional but recommended for performance) ***
-// Ensures faster lookups by companyId and messageId
+// Create compound index instead of individual ones to avoid duplicates
 ticketSchema.index({ companyId: 1, gmailMessageId: 1 });
 
 export default mongoose.model('Ticket', ticketSchema);
