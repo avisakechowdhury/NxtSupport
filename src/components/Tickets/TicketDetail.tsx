@@ -9,7 +9,9 @@ import {
   User,
   Clock,
   Clipboard,
-  Languages
+  Languages,
+  UserCheck,
+  Plus
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useTicketStore } from '../../store/ticketStore';
@@ -28,6 +30,7 @@ const TicketDetail = () => {
     escalateTicket,
     resolveTicket,
     assignTicket,
+    addNote,
     isLoading 
   } = useTicketStore();
   
@@ -38,6 +41,8 @@ const TicketDetail = () => {
   const [showEscalateForm, setShowEscalateForm] = useState(false);
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [responseConfidence, setResponseConfidence] = useState(0);
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [noteText, setNoteText] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -77,6 +82,31 @@ const TicketDetail = () => {
     await assignTicket(id, selectedMember);
     setShowAssignModal(false);
     setSelectedMember('');
+  };
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !noteText.trim()) return;
+    
+    await addNote(id, noteText);
+    setShowNoteForm(false);
+    setNoteText('');
+    // Refresh activities to show the new note
+    fetchTicketActivities(id);
+  };
+
+  const renderEmailBody = (body: string) => {
+    // Enhanced email body rendering with better HTML support
+    return (
+      <div 
+        className="prose prose-sm max-w-none bg-neutral-50 p-4 rounded-lg border border-neutral-200"
+        dangerouslySetInnerHTML={{ __html: body }}
+        style={{
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word'
+        }}
+      />
+    );
   };
 
   if (isLoading || !currentTicket) {
@@ -124,15 +154,13 @@ const TicketDetail = () => {
               </button>
             )}
             
-            {!currentTicket.assignedTo && (
-              <button
-                className="inline-flex items-center px-3 py-1.5 border border-neutral-300 text-xs font-medium rounded text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                onClick={() => setShowAssignModal(true)}
-              >
-                <User className="h-4 w-4 mr-1" />
-                Assign
-              </button>
-            )}
+            <button
+              className="inline-flex items-center px-3 py-1.5 border border-neutral-300 text-xs font-medium rounded text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              onClick={() => setShowAssignModal(true)}
+            >
+              <UserCheck className="h-4 w-4 mr-1" />
+              {currentTicket.assignedTo ? 'Reassign' : 'Assign'}
+            </button>
           </div>
         </div>
       </div>
@@ -141,7 +169,9 @@ const TicketDetail = () => {
       {showAssignModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium text-neutral-900 mb-4">Assign Ticket</h3>
+            <h3 className="text-lg font-medium text-neutral-900 mb-4">
+              {currentTicket.assignedTo ? 'Reassign Ticket' : 'Assign Ticket'}
+            </h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Select Team Member
@@ -173,7 +203,7 @@ const TicketDetail = () => {
                 disabled={!selectedMember}
                 className="px-4 py-2 border border-transparent rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
               >
-                Assign
+                {currentTicket.assignedTo ? 'Reassign' : 'Assign'}
               </button>
             </div>
           </div>
@@ -237,8 +267,9 @@ const TicketDetail = () => {
                   </div>
                 </div>
                 
-                <div className="prose prose-sm max-w-none">
-                  <p className="whitespace-pre-line">{currentTicket.body}</p>
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium text-neutral-900 mb-2">Original Email:</h4>
+                  {renderEmailBody(currentTicket.body)}
                 </div>
               </div>
               
@@ -350,7 +381,53 @@ const TicketDetail = () => {
               )}
               
               <div className="border-t border-neutral-200 pt-4">
-                <h4 className="text-sm font-medium text-neutral-900 mb-3">Activity Log</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-neutral-900">Activity Log</h4>
+                  <button
+                    onClick={() => setShowNoteForm(true)}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Note
+                  </button>
+                </div>
+
+                {showNoteForm && (
+                  <div className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                    <form onSubmit={handleAddNote}>
+                      <label className="block text-sm font-medium text-neutral-700 mb-1">
+                        Add Note
+                      </label>
+                      <textarea
+                        className="block w-full rounded-md border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm mb-3"
+                        rows={3}
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        placeholder="Add a note for your team..."
+                        required
+                      ></textarea>
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-3 py-2 border border-neutral-300 shadow-sm text-sm leading-4 font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50"
+                          onClick={() => {
+                            setShowNoteForm(false);
+                            setNoteText('');
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
+                        >
+                          Add Note
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
                 <div className="flow-root">
                   <ul className="-mb-8">
                     {activities.map((activity, activityIdx) => (
@@ -439,14 +516,14 @@ const TicketDetail = () => {
                   </p>
                 </div>
                 
-                {currentTicket.assignedTo && (
-                  <div>
-                    <p className="text-xs text-neutral-500">Assigned To</p>
-                    <p className="text-sm font-medium text-neutral-900">
-                      Support Agent
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-xs text-neutral-500">Assigned To</p>
+                  <p className="text-sm font-medium text-neutral-900">
+                    {currentTicket.assignedTo && typeof currentTicket.assignedTo === 'object' 
+                      ? currentTicket.assignedTo.name 
+                      : 'Unassigned'}
+                  </p>
+                </div>
                 
                 {currentTicket.escalatedAt && (
                   <div>
@@ -532,6 +609,7 @@ const TicketDetail = () => {
                 
                 <div className="space-y-2">
                   <button
+                    onClick={() => setShowNoteForm(true)}
                     className="w-full flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                   >
                     Add Note

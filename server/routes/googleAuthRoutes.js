@@ -84,6 +84,15 @@ const analyzeEmailWithGemini = async (subject, body) => {
     }
 };
 
+// Helper function to render email template
+const renderEmailTemplate = (template, variables) => {
+  let rendered = template;
+  Object.keys(variables).forEach(key => {
+    const placeholder = `{{${key}}}`;
+    rendered = rendered.replace(new RegExp(placeholder, 'g'), variables[key]);
+  });
+  return rendered;
+};
 
 // Initiate Google OAuth flow, protected route
 router.get('/google/initiate', (req, res) => {
@@ -271,14 +280,33 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
         }
 
         let body = '';
-        if (msg.data.payload?.parts) {
-          const textPart = msg.data.payload.parts.find((part) => part.mimeType === 'text/plain');
-          if (textPart?.body?.data) {
-            body = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
+        let htmlBody = '';
+        
+        // Enhanced body extraction to handle both text and HTML
+        const extractBody = (payload) => {
+          if (payload.parts) {
+            for (const part of payload.parts) {
+              if (part.mimeType === 'text/plain' && part.body?.data) {
+                body = Buffer.from(part.body.data, 'base64').toString('utf-8');
+              } else if (part.mimeType === 'text/html' && part.body?.data) {
+                htmlBody = Buffer.from(part.body.data, 'base64').toString('utf-8');
+              } else if (part.parts) {
+                extractBody(part); // Recursive for nested parts
+              }
+            }
+          } else if (payload.body?.data) {
+            if (payload.mimeType === 'text/html') {
+              htmlBody = Buffer.from(payload.body.data, 'base64').toString('utf-8');
+            } else {
+              body = Buffer.from(payload.body.data, 'base64').toString('utf-8');
+            }
           }
-        } else if (msg.data.payload?.body?.data) {
-          body = Buffer.from(msg.data.payload.body.data, 'base64').toString('utf-8');
-        }
+        };
+
+        extractBody(msg.data.payload);
+
+        // Prefer HTML body for better rendering, fallback to text
+        const finalBody = htmlBody || body;
 
         const isUnread = msg.data.labelIds?.includes('UNREAD') || false;
         const subjectValue = subjectHeader?.value || 'No Subject';
@@ -294,7 +322,7 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
             from: fromValue,
             dateTime: dateValue,
             snippet: snippetValue,
-            body: body,
+            body: finalBody,
             isUnread: isUnread,
             type: 'Complaint',
             ticketNumber: existingTicket.ticketNumber,
@@ -309,7 +337,7 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
 
         // --- METHOD 1: New Gemini API Analysis (Recommended) ---
         // To use this, uncomment the following lines and comment out METHOD 2.
-        const emailType = await analyzeEmailWithGemini(subjectValue, body);
+        const emailType = await analyzeEmailWithGemini(subjectValue, finalBody || snippetValue);
         isComplaint = (emailType === 'Complaint');
         
         // --- METHOD 2: Original Keyword and Sentiment Analysis ---
@@ -332,13 +360,13 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
           const ticketCount = await Ticket.countDocuments({ companyId: req.user.companyId });
           const ticketNumber = `INC${(ticketCount + 1).toString().padStart(6, '0')}`;
 
-          const sentimentResult = sentiment.analyze(`${subjectValue} ${body}`); // Still use sentiment for priority
+          const sentimentResult = sentiment.analyze(`${subjectValue} ${finalBody || snippetValue}`); // Still use sentiment for priority
 
           const ticket = new Ticket({
             ticketNumber,
             companyId: req.user.companyId,
             subject: subjectValue,
-            body: body || snippetValue,
+            body: finalBody || snippetValue,
             senderEmail: fromValue.match(/<(.+)>/)?.[1] || fromValue,
             senderName: fromValue.match(/^([^<]+)/)?.[1]?.trim() || 'Unknown Sender',
             gmailMessageId: messageId,
@@ -357,12 +385,29 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
           });
           await activity.save();
 
-          const emailContent = `Dear ${ticket.senderName},\n\nThank you for contacting our support team. This email confirms that we have received your message regarding: "${ticket.subject}".\n\nYour request has been assigned ticket number: ${ticket.ticketNumber}\n\nOur team will review your request and get back to you as soon as possible. You can reply to this email to add more information to your ticket.\n\nBest regards,\n${company.name} Support Team`;
+          // Use custom email template if available
+          const template = company.emailTemplate;
+          const useCustom = template?.useCustomTemplate && template?.subject && template?.body;
+          
+          const templateVars = {
+            customerName: ticket.senderName,
+            companyName: company.name,
+            subject: ticket.subject,
+            ticketNumber: ticket.ticketNumber
+          };
+
+          const emailSubject = useCustom 
+            ? renderEmailTemplate(template.subject, templateVars)
+            : `[${ticket.ticketNumber}] We have received your support request`;
+
+          const emailContent = useCustom
+            ? renderEmailTemplate(template.body, templateVars)
+            : `Dear ${ticket.senderName},\n\nThank you for contacting our support team. This email confirms that we have received your message regarding: "${ticket.subject}".\n\nYour request has been assigned ticket number: ${ticket.ticketNumber}\n\nOur team will review your request and get back to you as soon as possible. You can reply to this email to add more information to your ticket.\n\nBest regards,\n${company.name} Support Team`;
 
           const emailLines = [
             'From: "' + company.name + ' Support" <' + company.googleAuth.connectedEmail + '>',
             'To: ' + ticket.senderEmail,
-            'Subject: [' + ticket.ticketNumber + '] We have received your support request',
+            'Subject: ' + emailSubject,
             'Content-Type: text/plain; charset=utf-8',
             '',
             emailContent
@@ -385,7 +430,7 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
             from: fromValue,
             dateTime: dateValue,
             snippet: snippetValue,
-            body: body,
+            body: finalBody,
             isUnread: isUnread,
             type: 'Complaint',
             ticketNumber: ticketNumber,
@@ -400,10 +445,10 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
             from: fromValue,
             dateTime: dateValue,
             snippet: snippetValue,
-            body: body,
+            body: finalBody,
             isUnread: isUnread,
             type: 'Normal',
-            sentimentScore: sentiment.analyze(`${subjectValue} ${body}`).score,
+            sentimentScore: sentiment.analyze(`${subjectValue} ${finalBody || snippetValue}`).score,
           });
         }
 

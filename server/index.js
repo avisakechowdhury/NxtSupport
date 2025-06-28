@@ -90,6 +90,39 @@ app.use('/api/team', teamRoutes);
 app.use('/api/personal', personalEmailRoutes); // Personal routes handle auth internally
 app.use('/api/preferences', authenticateToken, preferenceRoutes); // Add this line
 
+// Company email template update route
+app.patch('/api/company/email-template', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'business') {
+      return res.status(403).json({ error: 'Only business accounts can update email templates' });
+    }
+
+    const { subject, body, useCustomTemplate } = req.body;
+    const { companyId } = req.user;
+
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    company.emailTemplate = {
+      subject: subject || company.emailTemplate?.subject || '[{{ticketNumber}}] We have received your support request',
+      body: body || company.emailTemplate?.body || 'Default template body',
+      useCustomTemplate: useCustomTemplate !== undefined ? useCustomTemplate : false
+    };
+
+    await company.save();
+
+    res.json({ 
+      message: 'Email template updated successfully',
+      emailTemplate: company.emailTemplate
+    });
+  } catch (error) {
+    console.error('Error updating email template:', error);
+    res.status(500).json({ error: 'Failed to update email template' });
+  }
+});
+
 // Business Registration
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -196,7 +229,8 @@ app.post('/api/auth/login', async (req, res) => {
         supportEmail: user.companyId.supportEmail,
         emailConnected: user.companyId.emailConnected,
         googleAuthConnected: !!(user.companyId.googleAuth && user.companyId.googleAuth.accessToken),
-        googleEmail: user.companyId.googleAuth ? user.companyId.googleAuth.connectedEmail : null
+        googleEmail: user.companyId.googleAuth ? user.companyId.googleAuth.connectedEmail : null,
+        emailTemplate: user.companyId.emailTemplate
       };
     }
     
@@ -223,7 +257,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
           supportEmail: user.companyId.supportEmail,
           emailConnected: user.companyId.emailConnected,
           googleAuthConnected: !!(user.companyId.googleAuth && user.companyId.googleAuth.accessToken),
-          googleEmail: user.companyId.googleAuth ? user.companyId.googleAuth.connectedEmail : null
+          googleEmail: user.companyId.googleAuth ? user.companyId.googleAuth.connectedEmail : null,
+          emailTemplate: user.companyId.emailTemplate
         };
       }
     }

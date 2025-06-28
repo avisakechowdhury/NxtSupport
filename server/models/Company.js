@@ -26,6 +26,31 @@ const companySchema = new mongoose.Schema({
       unique: false, // Allow same email to be connected to multiple companies
     },
   },
+  // Email template customization
+  emailTemplate: {
+    subject: {
+      type: String,
+      default: '[{{ticketNumber}}] We have received your support request'
+    },
+    body: {
+      type: String,
+      default: `Dear {{customerName}},
+
+Thank you for contacting {{companyName}} Support.
+
+This email confirms that we have received your message regarding: "{{subject}}".
+Your request has been assigned ticket number: {{ticketNumber}}.
+
+Our team will review your request and get back to you as soon as possible. You can reply to this email to add more information to your ticket.
+
+Best regards,
+The {{companyName}} Support Team`
+    },
+    useCustomTemplate: {
+      type: Boolean,
+      default: false
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now,

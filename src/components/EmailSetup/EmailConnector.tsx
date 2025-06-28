@@ -140,6 +140,8 @@ const EmailConnector: React.FC = () => {
   const [emails, setEmails] = useState<Email[]>([]);
   const [isFetchingEmails, setIsFetchingEmails] = useState<boolean>(false);
   const [fetchEmailsError, setFetchEmailsError] = useState<string>('');
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
 
   const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 
@@ -160,6 +162,13 @@ const EmailConnector: React.FC = () => {
     }
   }, [company]);
 
+  // Only fetch emails once when component mounts and company is connected
+  useEffect(() => {
+    if (company?.googleAuthConnected && token && emails.length === 0) {
+      console.log("EmailConnector Effect: Google is connected, fetching emails once.");
+      fetchGoogleEmails(true);
+    }
+  }, [company?.googleAuthConnected, token]);
 
   const fetchGoogleEmails = useCallback(async (isTriggeredManuallyOrFirstLoad = false) => {
     if (!company || !company.googleAuthConnected || !token) {
@@ -255,16 +264,20 @@ const handleGoogleSignIn = async () => {
     }
   };
 
-  useEffect(() => {
-    if (company?.googleAuthConnected && token) { // Added token check
-      console.log("EmailConnector Effect: Google is connected, fetching emails.");
-      fetchGoogleEmails(true);
-    } else {
-      console.log("EmailConnector Effect: Google is not connected, clearing emails.");
-      setEmails([]);
-    }
-  // Only depend on the actual data changing, not the function reference
-  }, [company?.googleAuthConnected, token]); // <-- REMOVED fetchGoogleEmails
+  const handleEmailClick = (email: Email) => {
+    setSelectedEmail(email);
+    setShowEmailModal(true);
+  };
+
+  const renderEmailBody = (body: string) => {
+    // Simple HTML rendering for email content
+    return (
+      <div 
+        className="prose prose-sm max-w-none"
+        dangerouslySetInnerHTML={{ __html: body }}
+      />
+    );
+  };
 
   if (!company) {
     return (
@@ -277,108 +290,147 @@ const handleGoogleSignIn = async () => {
 
   if (company.googleAuthConnected && company.googleEmail) {
     return (
-      <div className="bg-white shadow-lg rounded-lg overflow-hidden w-full">
-        <div className="p-6 border-b border-neutral-200">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png" alt="Google" className="h-10 w-10 mr-3"/>
-              <div>
-                <h3 className="text-lg font-semibold text-neutral-900">Connected with Google</h3>
-                <p className="text-sm text-green-600 truncate max-w-xs sm:max-w-sm md:max-w-md" title={company.googleEmail}>
-                  {company.googleEmail}
-                </p>
+      <>
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden w-full">
+          <div className="p-6 border-b border-neutral-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png" alt="Google" className="h-10 w-10 mr-3"/>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-900">Connected with Google</h3>
+                  <p className="text-sm text-green-600 truncate max-w-xs sm:max-w-sm md:max-w-md" title={company.googleEmail}>
+                    {company.googleEmail}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => fetchGoogleEmails(true)}
+                  disabled={isFetchingEmails || isConnectingGoogle}
+                  className="p-2 rounded-md hover:bg-neutral-100 text-neutral-600 disabled:opacity-50 disabled:cursor-wait"
+                  aria-label="Refresh emails"
+                >
+                  {isFetchingEmails ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                  onClick={handleGoogleDisconnect}
+                  disabled={isConnectingGoogle}
+                >
+                  {isConnectingGoogle ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Power className="h-5 w-5 mr-2 text-red-500" />}
+                  Disconnect Google
+                </button>
               </div>
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-              onClick={handleGoogleDisconnect}
-              disabled={isConnectingGoogle}
-            >
-              {isConnectingGoogle ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Power className="h-5 w-5 mr-2 text-red-500" />}
-              Disconnect Google
-            </button>
-          </div>
-        </div>
-
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h4 className="text-xl font-semibold text-neutral-800">Google Mail Inbox (Recent)</h4>
-            <button
-              onClick={() => fetchGoogleEmails(true)}
-              disabled={isFetchingEmails || isConnectingGoogle}
-              className="p-2 rounded-md hover:bg-neutral-100 text-neutral-600 disabled:opacity-50 disabled:cursor-wait"
-              aria-label="Refresh emails"
-            >
-              {isFetchingEmails ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
-            </button>
           </div>
 
-          {connectError && ( // Display general connection errors here as well
-            <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
-              <AlertCircle className="h-5 w-5 text-red-500 inline mr-2" /> {connectError}
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-xl font-semibold text-neutral-800">Google Mail Inbox (Recent)</h4>
             </div>
-          )}
-          {fetchEmailsError && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md relative">
-              <AlertCircle className="h-5 w-5 text-red-400 inline mr-2" /> {fetchEmailsError}
-            </div>
-          )}
 
-          {isFetchingEmails && emails.length === 0 && (
-            <div className="flex flex-col justify-center items-center py-10 text-center">
-              <Loader2 className="h-8 w-8 text-primary-600 animate-spin mb-2" />
-              <p className="text-neutral-600">Loading emails...</p>
-            </div>
-          )}
+            {connectError && ( // Display general connection errors here as well
+              <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                <AlertCircle className="h-5 w-5 text-red-500 inline mr-2" /> {connectError}
+              </div>
+            )}
+            {fetchEmailsError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md relative">
+                <AlertCircle className="h-5 w-5 text-red-400 inline mr-2" /> {fetchEmailsError}
+              </div>
+            )}
 
-          {!isFetchingEmails && emails.length === 0 && !fetchEmailsError && !connectError && (
-            <div className="text-center py-10">
-              <Inbox className="h-12 w-12 text-neutral-400 mx-auto mb-2" />
-              <p className="text-neutral-500">No recent emails found in your Google inbox.</p>
-            </div>
-          )}
+            {isFetchingEmails && emails.length === 0 && (
+              <div className="flex flex-col justify-center items-center py-10 text-center">
+                <Loader2 className="h-8 w-8 text-primary-600 animate-spin mb-2" />
+                <p className="text-neutral-600">Loading emails...</p>
+              </div>
+            )}
 
-          {emails.length > 0 && (
-            <ul className="space-y-3 max-h-[calc(100vh-22rem)] overflow-y-auto pr-2 custom-scrollbar">
-              {/* *** CHANGE: Updated rendering logic *** */}
-              {emails.map((email) => (
-                <li key={email.id} className={`p-4 bg-neutral-50 rounded-md shadow-sm hover:shadow-md transition-shadow border-l-4 ${email.type === 'Complaint' ? 'border-blue-500' : 'border-transparent'}`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <h5 className="font-semibold text-neutral-800 truncate pr-2" title={email.subject}>{email.subject}</h5>
-                    <span className="text-xs text-neutral-500 whitespace-nowrap ml-2">
-                      {new Date(email.dateTime).toLocaleString()} {email.isUnread && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Unread</span>}
-                    </span>
-                  </div>
-                  <p className="text-sm text-neutral-600 truncate" title={email.from}>From: {email.from}</p>
-                  <p className="text-sm text-neutral-500 mt-1 text-ellipsis overflow-hidden h-10">{email.snippet}</p>
-                  {/* Display ticket info if it's a complaint */}
-                  {email.type === 'Complaint' && email.ticketNumber && (
-                    <div className="mt-2 text-xs font-medium flex flex-wrap gap-2">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                           Type: Complaint
-                        </span>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
-                           Ticket: {email.ticketNumber}
-                        </span>
-                        {email.acknowledged && (
-                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800">
-                             Acknowledged: Yes
-                           </span>
-                        )}
+            {!isFetchingEmails && emails.length === 0 && !fetchEmailsError && !connectError && (
+              <div className="text-center py-10">
+                <Inbox className="h-12 w-12 text-neutral-400 mx-auto mb-2" />
+                <p className="text-neutral-500">No recent emails found in your Google inbox.</p>
+              </div>
+            )}
+
+            {emails.length > 0 && (
+              <ul className="space-y-3 max-h-[calc(100vh-22rem)] overflow-y-auto pr-2 custom-scrollbar">
+                {emails.map((email) => (
+                  <li 
+                    key={email.id} 
+                    className={`p-4 bg-neutral-50 rounded-md shadow-sm hover:shadow-md transition-shadow border-l-4 cursor-pointer ${email.type === 'Complaint' ? 'border-blue-500' : 'border-transparent'}`}
+                    onClick={() => handleEmailClick(email)}
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <h5 className="font-semibold text-neutral-800 truncate pr-2" title={email.subject}>{email.subject}</h5>
+                      <span className="text-xs text-neutral-500 whitespace-nowrap ml-2">
+                        {new Date(email.dateTime).toLocaleString()} {email.isUnread && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Unread</span>}
+                      </span>
                     </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                    <p className="text-sm text-neutral-600 truncate" title={email.from}>From: {email.from}</p>
+                    <p className="text-sm text-neutral-500 mt-1 text-ellipsis overflow-hidden h-10">{email.snippet}</p>
+                    {/* Display ticket info if it's a complaint */}
+                    {email.type === 'Complaint' && email.ticketNumber && (
+                      <div className="mt-2 text-xs font-medium flex flex-wrap gap-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                             Type: Complaint
+                          </span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
+                             Ticket: {email.ticketNumber}
+                          </span>
+                          {email.acknowledged && (
+                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800">
+                               Acknowledged: Yes
+                             </span>
+                          )}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
-      </div>
+
+        {/* Email Modal */}
+        {showEmailModal && selectedEmail && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+              <div className="p-6 border-b border-neutral-200">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-neutral-900 mb-2">{selectedEmail.subject}</h3>
+                    <div className="text-sm text-neutral-600">
+                      <p><strong>From:</strong> {selectedEmail.from}</p>
+                      <p><strong>Date:</strong> {new Date(selectedEmail.dateTime).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowEmailModal(false)}
+                    className="ml-4 text-neutral-400 hover:text-neutral-600"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                {selectedEmail.body ? renderEmailBody(selectedEmail.body) : (
+                  <p className="text-neutral-600">{selectedEmail.snippet}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
   return (
-    <div className="bg-white shadow-xl rounded-lg overflow-hidden w-full max-w-md mx-auto">
+    <div className="bg-white shadow-xl rounded-lg overflow-hidden w-full max-w-4xl mx-auto">
       <div className="p-8">
         <div className="flex items-center mb-6">
             <Mail className="h-8 w-8 text-primary-600 mr-3" />
