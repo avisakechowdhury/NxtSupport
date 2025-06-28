@@ -275,7 +275,7 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
         const senderEmail = (fromValue.match(/<(.+)>/)?.[1] || fromValue).trim().toLowerCase();
 
         if (senderEmail === supportEmail) {
-          console.log(`Skipping email from self (${senderEmail}). Message ID: ${messageId}`);
+          // console.log(`Skipping email from self (${senderEmail}). Message ID: ${messageId}`);
           continue;
         }
 

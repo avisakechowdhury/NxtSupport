@@ -30,11 +30,11 @@ const useAuthStore = (): AuthStore => {
 
   const API_URL_FOR_STORE = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 
-  console.log(API_URL_FOR_STORE, 'Api URL for Store')
+  // console.log(API_URL_FOR_STORE, 'Api URL for Store')
 
   const fetchCompanyData = useCallback(async () => {
     if (!authToken) {
-        console.log("AuthStore: No auth token, cannot fetch company data.");
+        // console.log("AuthStore: No auth token, cannot fetch company data.");
         return;
     }
     try {
@@ -42,7 +42,7 @@ const useAuthStore = (): AuthStore => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       setCompany(response.data.company);
-      console.log("AuthStore: Fetched company data:", response.data.company);
+      // console.log("AuthStore: Fetched company data:", response.data.company);
     } catch (error) {
       console.error("AuthStore: Failed to fetch company data", error);
       if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -57,7 +57,7 @@ const useAuthStore = (): AuthStore => {
 
   useEffect(() => {
     if (authToken && !company) {
-        console.log("AuthStore: Initial fetch of company data triggered.");
+        // // console.log("AuthStore: Initial fetch of company data triggered.");
         fetchCompanyData();
     }
   }, [authToken, company, fetchCompanyData]);
@@ -67,7 +67,7 @@ const useAuthStore = (): AuthStore => {
         // Ensure the message is from a trusted origin if your frontend and backend are on different domains
         // For example: if (event.origin !== 'http://localhost:3000') return;
         if (event.data === 'google-auth-success') {
-            console.log('AuthStore: Received google-auth-success message. Fetching company data.');
+            // console.log('AuthStore: Received google-auth-success message. Fetching company data.');
             fetchCompanyData();
         }
     };
@@ -79,7 +79,7 @@ const useAuthStore = (): AuthStore => {
     const messageFromParam = urlParams.get('message');
 
     if (status === 'google-success') {
-        console.log('AuthStore: Google auth success via redirect. Email:', emailFromParam, "Fetching company data.");
+        // console.log('AuthStore: Google auth success via redirect. Email:', emailFromParam, "Fetching company data.");
         fetchCompanyData();
         window.history.replaceState({}, document.title, window.location.pathname); // Clean URL
     } else if (status === 'google-error') {
@@ -97,7 +97,7 @@ const useAuthStore = (): AuthStore => {
     company,
     token: authToken,
     setCompanyAuthStatus: (statusUpdate) => {
-      console.log("AuthStore: Updating company auth status", statusUpdate);
+      // console.log("AuthStore: Updating company auth status", statusUpdate);
       setCompany(prev => prev ? { 
         ...prev, 
         ...statusUpdate,
@@ -145,11 +145,11 @@ const EmailConnector: React.FC = () => {
 
   const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 
-  console.log(API_BASE_URL, 'Api Base URL')
+  // console.log(API_BASE_URL, 'Api Base URL')
 
   useEffect(() => {
     if (company) {
-      console.log("EmailConnector: Company data updated/loaded:", company);
+      // console.log("EmailConnector: Company data updated/loaded:", company);
       // If coming back from Google error redirect, connectError might be set by URL param handling in store
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('status') === 'google-error') {
@@ -158,14 +158,14 @@ const EmailConnector: React.FC = () => {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     } else {
-        console.log("EmailConnector: Company data is null.");
+        // console.log("EmailConnector: Company data is null.");
     }
   }, [company]);
 
   // Only fetch emails once when component mounts and company is connected
   useEffect(() => {
     if (company?.googleAuthConnected && token && emails.length === 0) {
-      console.log("EmailConnector Effect: Google is connected, fetching emails once.");
+      // console.log("EmailConnector Effect: Google is connected, fetching emails once.");
       fetchGoogleEmails(true);
     }
   }, [company?.googleAuthConnected, token]);
@@ -178,14 +178,14 @@ const EmailConnector: React.FC = () => {
     }
     if (isTriggeredManuallyOrFirstLoad) setIsFetchingEmails(true);
     setFetchEmailsError('');
-    console.log("fetchGoogleEmails: Attempting to fetch emails.");
+    // console.log("fetchGoogleEmails: Attempting to fetch emails.");
 
     try {
       const response = await axios.get<FetchEmailsResponse>(`${API_BASE_URL}/auth/google/inbox`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setEmails(response.data.emails || []);
-      console.log("fetchGoogleEmails: Successfully fetched emails.", response.data.emails);
+      // console.log("fetchGoogleEmails: Successfully fetched emails.", response.data.emails);
     } catch (err) {
       const error = err as AxiosError<ApiError>;
       console.error('fetchGoogleEmails: Failed to fetch Google emails:', error.response?.data || error.message);
@@ -213,7 +213,7 @@ const handleGoogleSignIn = async () => {
   setIsConnectingGoogle(true);
   setConnectError('');
   try {
-    console.log('API_BASE_URL:', API_BASE_URL);
+    // console.log('API_BASE_URL:', API_BASE_URL);
     const response = await axios.get<{ authorizeUrl: string }>(
       `${API_BASE_URL}/auth/google/initiate`,
       {
@@ -222,7 +222,7 @@ const handleGoogleSignIn = async () => {
       }
     );
     const { authorizeUrl } = response.data;
-    console.log('authorizeUrl:', authorizeUrl);
+    // console.log('authorizeUrl:', authorizeUrl);
     if (authorizeUrl) {
       window.location.href = authorizeUrl;
     } else {
@@ -247,11 +247,11 @@ const handleGoogleSignIn = async () => {
     setConnectError('');
     setFetchEmailsError('');
     try {
-        console.log("handleGoogleDisconnect: Initiating disconnect.");
+        // console.log("handleGoogleDisconnect: Initiating disconnect.");
         await axios.post(`${API_BASE_URL}/auth/google/disconnect`, {}, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        console.log("handleGoogleDisconnect: Successfully disconnected on backend.");
+        // console.log("handleGoogleDisconnect: Successfully disconnected on backend.");
         setCompanyAuthStatus({ googleAuthConnected: false, googleEmail: null, emailConnectedOverall: false }); 
         setEmails([]);
         // await fetchCompanyData(); // Re-fetch to confirm, or rely on setCompanyAuthStatus
