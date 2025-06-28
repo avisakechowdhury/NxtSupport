@@ -5,7 +5,10 @@ import { Ticket, TicketActivity, TicketsState } from '../types';
 const API_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 let pollIntervalId: NodeJS.Timeout | null = null;
 
-export const useTicketStore = create<TicketsState>((set, get) => ({
+export const useTicketStore = create<TicketsState & {
+  createManualTicket: (ticketData: any) => Promise<void>;
+  updateTicketPriority: (id: string, priority: string) => Promise<void>;
+}>((set, get) => ({
   tickets: [],
   currentTicket: null,
   activities: [],
@@ -65,6 +68,24 @@ export const useTicketStore = create<TicketsState>((set, get) => ({
       }));
     } catch (error) {
       set({ error: 'Failed to create ticket', isLoading: false });
+    }
+  },
+
+  createManualTicket: async (ticketData: any) => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_URL}/tickets/manual`, ticketData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      set(state => ({ 
+        tickets: [...state.tickets, response.data],
+        isLoading: false 
+      }));
+    } catch (error) {
+      set({ error: 'Failed to create manual ticket', isLoading: false });
+      throw error;
     }
   },
 

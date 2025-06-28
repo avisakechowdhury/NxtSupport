@@ -123,6 +123,50 @@ app.patch('/api/company/email-template', authenticateToken, async (req, res) => 
   }
 });
 
+// Manual ticket creation route
+app.post('/api/tickets/manual', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'business') {
+      return res.status(403).json({ error: 'Manual ticket creation only available for business accounts' });
+    }
+    
+    const ticketCount = await Ticket.countDocuments({ companyId: req.user.companyId });
+    const ticketNumber = `TKT-${(ticketCount + 1).toString().padStart(4, '0')}`;
+    
+    // Prepare ticket data and handle empty assignedTo field
+    const ticketData = {
+      ...req.body,
+      ticketNumber,
+      companyId: req.user.companyId,
+      status: 'new',
+      source: 'manual'
+    };
+
+    // Handle assignedTo field - convert empty string to null
+    if (ticketData.assignedTo === '' || ticketData.assignedTo === undefined) {
+      ticketData.assignedTo = null;
+    }
+
+    const ticket = new Ticket(ticketData);
+    await ticket.save();
+    
+    // Create ticket activity
+    const activity = new TicketActivity({
+      ticketId: ticket._id,
+      activityType: 'created',
+      userId: req.user.id,
+      userName: req.body.createdByName || 'System',
+      details: `Ticket created manually by ${req.body.createdByName || 'System'}`
+    });
+    await activity.save();
+    
+    res.status(201).json(ticket);
+  } catch (error) {
+    console.error('Manual ticket creation error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Business Registration
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -546,7 +590,7 @@ app.get('/api/tickets/:id/activities', authenticateToken, async (req, res) => {
     
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
     
-    const activities = await TicketActivity.find({ ticketId: req.params.id }).sort({ createdAt: -1 });
+    const activities = await TicketActivity.find({ ticketId: req.params.id }).sort({ createdAt: 1 }); // Changed to ascending order for chronological display
     res.json(activities);
   } catch (error) {
     console.error('Error fetching ticket activities:', error);

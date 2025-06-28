@@ -12,6 +12,11 @@ const ticketSchema = new mongoose.Schema({
   senderEmail: { type: String, required: true },
   senderName: { type: String, required: true },
   gmailMessageId: { type: String, sparse: true },
+  source: { 
+    type: String, 
+    enum: ['email', 'manual'], 
+    default: 'email' 
+  },
   status: { 
     type: String, 
     enum: ['new', 'acknowledged', 'inProgress', 'responded', 'escalated', 'resolved', 'closed'],
@@ -39,5 +44,11 @@ const ticketSchema = new mongoose.Schema({
 
 // Create compound index instead of individual ones to avoid duplicates
 ticketSchema.index({ companyId: 1, gmailMessageId: 1 });
+
+// Update the updatedAt field on save
+ticketSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
 
 export default mongoose.model('Ticket', ticketSchema);

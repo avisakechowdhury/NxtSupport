@@ -313,7 +313,11 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
         const dateValue = dateHeader?.value || new Date().toISOString();
         const snippetValue = msg.data.snippet || '';
 
-        const existingTicket = await Ticket.findOne({ gmailMessageId: messageId, companyId });
+        // Check if ticket already exists to avoid duplicates
+        const existingTicket = await Ticket.findOne({ 
+          gmailMessageId: messageId, 
+          companyId 
+        });
 
         if (existingTicket) {
           emails.push({
@@ -454,6 +458,8 @@ router.get('/google/inbox', authenticateToken, async (req, res) => {
 
       } catch (procError) {
         console.error(`Error processing message ${message.id}:`, procError);
+        // Continue processing other emails even if one fails
+        continue;
       }
     }
 

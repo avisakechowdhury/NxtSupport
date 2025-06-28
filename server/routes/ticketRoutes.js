@@ -12,7 +12,22 @@ router.get('/', authenticateToken, async (req, res) => {
     const tickets = await Ticket.find({ companyId: req.user.companyId })
       .sort({ createdAt: -1 })
       .populate('assignedTo', 'name email');
-    res.json(tickets);
+    
+    // Fetch activities for each ticket
+    const ticketsWithActivities = await Promise.all(
+      tickets.map(async (ticket) => {
+        const activities = await TicketActivity.find({ ticketId: ticket._id })
+          .sort({ createdAt: 1 })
+          .limit(5); // Limit to recent activities for performance
+        
+        return {
+          ...ticket.toObject(),
+          activities
+        };
+      })
+    );
+    
+    res.json(ticketsWithActivities);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -36,8 +51,16 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Get ticket activities
 router.get('/:id/activities', authenticateToken, async (req, res) => {
   try {
+    // Verify ticket belongs to user's company
+    const ticket = await Ticket.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId
+    });
+    
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    
     const activities = await TicketActivity.find({ ticketId: req.params.id })
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 }) // Chronological order
       .populate('userId', 'name email');
     res.json(activities);
   } catch (error) {
@@ -66,12 +89,15 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       { new: true }
     ).populate('assignedTo', 'name email');
 
+    // Get user info for activity
+    const user = await User.findById(req.user.id);
+
     const activity = new TicketActivity({
       ticketId: ticket._id,
       activityType: 'statusChanged',
       userId: req.user.id,
-      userName: req.user.name,
-      details: `Status changed to ${status}${reason ? `: ${reason}` : ''}`
+      userName: user?.name || 'System',
+      details: `Status changed to ${status}${reason ? `: ${reason}` : ''} by ${user?.name || 'System'}`
     });
     await activity.save();
 
@@ -93,12 +119,15 @@ router.patch('/:id/priority', authenticateToken, async (req, res) => {
 
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
+    // Get user info for activity
+    const user = await User.findById(req.user.id);
+
     const activity = new TicketActivity({
       ticketId: ticket._id,
       activityType: 'statusChanged',
       userId: req.user.id,
-      userName: req.user.name,
-      details: `Priority changed to ${priority}`
+      userName: user?.name || 'System',
+      details: `Priority changed to ${priority} by ${user?.name || 'System'}`
     });
     await activity.save();
 
@@ -112,12 +141,12 @@ router.patch('/:id/priority', authenticateToken, async (req, res) => {
 router.post('/:id/assign', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.body;
-    const user = await User.findOne({ 
+    const assignee = await User.findOne({ 
       _id: userId,
       companyId: req.user.companyId 
     });
 
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!assignee) return res.status(404).json({ error: 'User not found' });
 
     const ticket = await Ticket.findOneAndUpdate(
       { _id: req.params.id, companyId: req.user.companyId },
@@ -127,12 +156,15 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
 
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
+    // Get current user info for activity
+    const currentUser = await User.findById(req.user.id);
+
     const activity = new TicketActivity({
       ticketId: ticket._id,
       activityType: 'assigned',
       userId: req.user.id,
-      userName: req.user.name,
-      details: `Assigned to ${user.name}`
+      userName: currentUser?.name || 'System',
+      details: `Assigned to ${assignee.name} by ${currentUser?.name || 'System'}`
     });
     await activity.save();
 
@@ -153,12 +185,15 @@ router.post('/:id/notes', authenticateToken, async (req, res) => {
 
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
+    // Get user info for activity
+    const user = await User.findById(req.user.id);
+
     const activity = new TicketActivity({
       ticketId: ticket._id,
       activityType: 'note',
       userId: req.user.id,
-      userName: req.user.name,
-      details: note
+      userName: user?.name || 'System',
+      details: `Note added by ${user?.name || 'System'}: ${note}`
     });
     await activity.save();
 

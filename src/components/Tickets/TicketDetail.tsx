@@ -11,16 +11,20 @@ import {
   Clipboard,
   Languages,
   UserCheck,
-  Plus
+  Plus,
+  Edit,
+  Save,
+  X
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useTicketStore } from '../../store/ticketStore';
 import { useTeamStore } from '../../store/teamStore';
-import { TicketActivity } from '../../types';
+import { useAuthStore } from '../../store/authStore';
 
 const TicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { 
     currentTicket, 
     activities, 
@@ -31,6 +35,7 @@ const TicketDetail = () => {
     resolveTicket,
     assignTicket,
     addNote,
+    updateTicketPriority,
     isLoading 
   } = useTicketStore();
   
@@ -43,6 +48,8 @@ const TicketDetail = () => {
   const [responseConfidence, setResponseConfidence] = useState(0);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [showPriorityEdit, setShowPriorityEdit] = useState(false);
+  const [newPriority, setNewPriority] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -95,19 +102,107 @@ const TicketDetail = () => {
     fetchTicketActivities(id);
   };
 
-  const renderEmailBody = (body: string) => {
-    // Enhanced email body rendering with better HTML support
+  const handlePriorityUpdate = async () => {
+    if (!id || !newPriority) return;
+    
+    await updateTicketPriority(id, newPriority);
+    setShowPriorityEdit(false);
+    setNewPriority('');
+    // Refresh activities to show the priority change
+    fetchTicketActivities(id);
+  };
+
+  const renderTicketContent = () => {
+    if (!currentTicket) return null;
+
+    // For manual tickets, show the description instead of email content
+    if (currentTicket.source === 'manual') {
+      return (
+        <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 mb-6">
+          <div className="flex items-start mb-3">
+            <div className="flex-shrink-0">
+              <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                <User className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-neutral-900">
+                {currentTicket.senderName} <span className="text-neutral-500 font-normal">&lt;{currentTicket.senderEmail}&gt;</span>
+              </p>
+              <p className="text-xs text-neutral-500">
+                {format(new Date(currentTicket.createdAt), "MMM d, yyyy 'at' h:mm a")}
+              </p>
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mt-1">
+                Manual Ticket
+              </span>
+            </div>
+          </div>
+          
+          <div className="prose prose-sm max-w-none">
+            <h4 className="text-sm font-medium text-neutral-900 mb-2">Subject:</h4>
+            <p className="text-neutral-700 mb-3">{currentTicket.subject}</p>
+            
+            <h4 className="text-sm font-medium text-neutral-900 mb-2">Description:</h4>
+            <div className="whitespace-pre-line text-neutral-700">{currentTicket.body}</div>
+          </div>
+        </div>
+      );
+    }
+
+    // For email tickets, render the email content
     return (
-      <div 
-        className="prose prose-sm max-w-none bg-neutral-50 p-4 rounded-lg border border-neutral-200"
-        dangerouslySetInnerHTML={{ __html: body }}
-        style={{
-          wordBreak: 'break-word',
-          overflowWrap: 'break-word'
-        }}
-      />
+      <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 mb-6">
+        <div className="flex items-start mb-3">
+          <div className="flex-shrink-0">
+            <div className="h-10 w-10 rounded-full bg-neutral-200 flex items-center justify-center">
+              <User className="h-6 w-6 text-neutral-500" />
+            </div>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm font-medium text-neutral-900">
+              {currentTicket.senderName} <span className="text-neutral-500 font-normal">&lt;{currentTicket.senderEmail}&gt;</span>
+            </p>
+            <p className="text-xs text-neutral-500">
+              {format(new Date(currentTicket.createdAt), "MMM d, yyyy 'at' h:mm a")}
+            </p>
+          </div>
+        </div>
+        
+        <div className="prose prose-sm max-w-none">
+          {renderEmailBody(currentTicket.body)}
+        </div>
+      </div>
     );
   };
+
+  const renderEmailBody = (body: string) => {
+    if (!body) return <p className="text-neutral-500">No content available</p>;
+    
+    // Check if it's HTML content
+    const isHTML = /<[a-z][\s\S]*>/i.test(body);
+    
+    if (isHTML) {
+      return (
+        <div 
+          className="prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: body }}
+          style={{
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word'
+          }}
+        />
+      );
+    } else {
+      // Plain text - preserve line breaks
+      return (
+        <pre className="whitespace-pre-wrap font-sans text-sm text-neutral-700">
+          {body}
+        </pre>
+      );
+    }
+  };
+
+  const isTicketResolved = currentTicket?.status === 'resolved' || currentTicket?.status === 'closed';
 
   if (isLoading || !currentTicket) {
     return (
@@ -134,7 +229,7 @@ const TicketDetail = () => {
           </div>
           
           <div className="flex space-x-3">
-            {currentTicket.status !== 'resolved' && currentTicket.status !== 'closed' && (
+            {!isTicketResolved && (
               <button
                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500"
                 onClick={handleResolve}
@@ -144,7 +239,7 @@ const TicketDetail = () => {
               </button>
             )}
             
-            {currentTicket.status !== 'escalated' && (
+            {currentTicket.status !== 'escalated' && !isTicketResolved && (
               <button
                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500"
                 onClick={() => setShowEscalateForm(true)}
@@ -154,13 +249,15 @@ const TicketDetail = () => {
               </button>
             )}
             
-            <button
-              className="inline-flex items-center px-3 py-1.5 border border-neutral-300 text-xs font-medium rounded text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              onClick={() => setShowAssignModal(true)}
-            >
-              <UserCheck className="h-4 w-4 mr-1" />
-              {currentTicket.assignedTo ? 'Reassign' : 'Assign'}
-            </button>
+            {!currentTicket.assignedTo && !isTicketResolved && (
+              <button
+                className="inline-flex items-center px-3 py-1.5 border border-neutral-300 text-xs font-medium rounded text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                onClick={() => setShowAssignModal(true)}
+              >
+                <User className="h-4 w-4 mr-1" />
+                Assign
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -169,9 +266,7 @@ const TicketDetail = () => {
       {showAssignModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium text-neutral-900 mb-4">
-              {currentTicket.assignedTo ? 'Reassign Ticket' : 'Assign Ticket'}
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-900 mb-4">Assign Ticket</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-neutral-700 mb-1">
                 Select Team Member
@@ -203,7 +298,7 @@ const TicketDetail = () => {
                 disabled={!selectedMember}
                 className="px-4 py-2 border border-transparent rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
               >
-                {currentTicket.assignedTo ? 'Reassign' : 'Assign'}
+                Assign
               </button>
             </div>
           </div>
@@ -248,32 +343,17 @@ const TicketDetail = () => {
                     {currentTicket.originalLanguage.toUpperCase()}
                   </span>
                 )}
+
+                {currentTicket.source === 'manual' && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    Created Manually
+                  </span>
+                )}
               </div>
               
-              <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 mb-6">
-                <div className="flex items-start mb-3">
-                  <div className="flex-shrink-0">
-                    <div className="h-10 w-10 rounded-full bg-neutral-200 flex items-center justify-center">
-                      <User className="h-6 w-6 text-neutral-500" />
-                    </div>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-neutral-900">
-                      {currentTicket.senderName} <span className="text-neutral-500 font-normal">&lt;{currentTicket.senderEmail}&gt;</span>
-                    </p>
-                    <p className="text-xs text-neutral-500">
-                      {format(new Date(currentTicket.createdAt), "MMM d, yyyy 'at' h:mm a")}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-neutral-900 mb-2">Original Email:</h4>
-                  {renderEmailBody(currentTicket.body)}
-                </div>
-              </div>
+              {renderTicketContent()}
               
-              {showEscalateForm && (
+              {showEscalateForm && !isTicketResolved && (
                 <div className="bg-warning-50 p-4 rounded-lg border border-warning-200 mb-6 animate-fade-in">
                   <h4 className="text-sm font-medium text-warning-800 mb-2">Escalate Ticket</h4>
                   <form onSubmit={handleEscalate}>
@@ -356,46 +436,51 @@ const TicketDetail = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex justify-center mb-6">
-                  <button
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                    onClick={handleGenerateResponse}
-                    disabled={isGeneratingResponse}
-                  >
-                    {isGeneratingResponse ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Generating AI Response...
-                      </>
-                    ) : (
-                      <>
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        Generate AI Response
-                      </>
-                    )}
-                  </button>
-                </div>
+                !isTicketResolved && (
+                  <div className="flex justify-center mb-6">
+                    <button
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      onClick={handleGenerateResponse}
+                      disabled={isGeneratingResponse}
+                    >
+                      {isGeneratingResponse ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Generating AI Response...
+                        </>
+                      ) : (
+                        <>
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Generate AI Response
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )
               )}
               
               <div className="border-t border-neutral-200 pt-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-medium text-neutral-900">Activity Log</h4>
-                  <button
-                    onClick={() => setShowNoteForm(true)}
-                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Note
-                  </button>
+                  {!isTicketResolved && (
+                    <button
+                      onClick={() => setShowNoteForm(true)}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Note
+                    </button>
+                  )}
                 </div>
 
+                {/* Add Note Form */}
                 {showNoteForm && (
                   <div className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
                     <form onSubmit={handleAddNote}>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">
                         Add Note
                       </label>
                       <textarea
@@ -403,7 +488,7 @@ const TicketDetail = () => {
                         rows={3}
                         value={noteText}
                         onChange={(e) => setNoteText(e.target.value)}
-                        placeholder="Add a note for your team..."
+                        placeholder="Add a note about this ticket..."
                         required
                       ></textarea>
                       <div className="flex justify-end space-x-2">
@@ -431,7 +516,7 @@ const TicketDetail = () => {
                 <div className="flow-root">
                   <ul className="-mb-8">
                     {activities.map((activity, activityIdx) => (
-                      <li key={activity.id}>
+                      <li key={activity._id}>
                         <div className="relative pb-8">
                           {activityIdx !== activities.length - 1 ? (
                             <span
@@ -503,10 +588,52 @@ const TicketDetail = () => {
                 </div>
                 
                 <div>
-                  <p className="text-xs text-neutral-500">Priority</p>
-                  <p className="text-sm font-medium text-neutral-900">
-                    {currentTicket.priority.charAt(0).toUpperCase() + currentTicket.priority.slice(1)}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-neutral-500">Priority</p>
+                    {!isTicketResolved && (
+                      <button
+                        onClick={() => {
+                          setShowPriorityEdit(true);
+                          setNewPriority(currentTicket.priority);
+                        }}
+                        className="text-xs text-primary-600 hover:text-primary-800"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  {showPriorityEdit ? (
+                    <div className="mt-1">
+                      <select
+                        value={newPriority}
+                        onChange={(e) => setNewPriority(e.target.value)}
+                        className="block w-full text-xs rounded border-neutral-300 focus:border-primary-500 focus:ring-primary-500"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                      <div className="flex justify-end space-x-1 mt-1">
+                        <button
+                          onClick={() => setShowPriorityEdit(false)}
+                          className="text-xs text-neutral-500 hover:text-neutral-700"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={handlePriorityUpdate}
+                          className="text-xs text-primary-600 hover:text-primary-800"
+                        >
+                          <Save className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-medium text-neutral-900">
+                      {currentTicket.priority.charAt(0).toUpperCase() + currentTicket.priority.slice(1)}
+                    </p>
+                  )}
                 </div>
                 
                 <div>
@@ -516,14 +643,16 @@ const TicketDetail = () => {
                   </p>
                 </div>
                 
-                <div>
-                  <p className="text-xs text-neutral-500">Assigned To</p>
-                  <p className="text-sm font-medium text-neutral-900">
-                    {currentTicket.assignedTo && typeof currentTicket.assignedTo === 'object' 
-                      ? currentTicket.assignedTo.name 
-                      : 'Unassigned'}
-                  </p>
-                </div>
+                {currentTicket.assignedTo && (
+                  <div>
+                    <p className="text-xs text-neutral-500">Assigned To</p>
+                    <p className="text-sm font-medium text-neutral-900">
+                      {typeof currentTicket.assignedTo === 'object' 
+                        ? currentTicket.assignedTo.name 
+                        : 'Support Agent'}
+                    </p>
+                  </div>
+                )}
                 
                 {currentTicket.escalatedAt && (
                   <div>
@@ -608,26 +737,35 @@ const TicketDetail = () => {
                 <h4 className="text-sm font-medium text-neutral-900 mb-3">Actions</h4>
                 
                 <div className="space-y-2">
-                  <button
-                    onClick={() => setShowNoteForm(true)}
-                    className="w-full flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Add Note
-                  </button>
+                  {!isTicketResolved && (
+                    <>
+                      <button
+                        onClick={() => setShowNoteForm(true)}
+                        className="w-full flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        Add Note
+                      </button>
+                      
+                      <button
+                        className="w-full flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        Forward
+                      </button>
+                      
+                      <button
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500"
+                        onClick={handleResolve}
+                      >
+                        Resolve Ticket
+                      </button>
+                    </>
+                  )}
                   
-                  <button
-                    className="w-full flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Forward
-                  </button>
-                  
-                  {currentTicket.status !== 'resolved' && currentTicket.status !== 'closed' && (
-                    <button
-                      className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500"
-                      onClick={handleResolve}
-                    >
-                      Resolve Ticket
-                    </button>
+                  {isTicketResolved && (
+                    <div className="text-center py-4">
+                      <CheckCircle className="h-8 w-8 text-success-500 mx-auto mb-2" />
+                      <p className="text-sm text-neutral-600">Ticket Resolved</p>
+                    </div>
                   )}
                 </div>
               </div>

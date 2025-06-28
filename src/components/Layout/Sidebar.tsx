@@ -10,7 +10,8 @@ import {
   Settings, 
   Mail,
   ChevronDown,
-  X
+  X,
+  Plus
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -57,7 +58,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isMobileMenuOpen, onMobileMenuClose }
       <aside className={sidebarClasses}>
         <div className="p-5 border-b border-neutral-800 flex items-center justify-between">
           <div className="flex items-center">
-            <Mail className="h-6 w-6 text-primary-400 mr-2" />
+            {/* Logo */}
+            <img 
+              src="/logo.png" 
+              alt="Logo" 
+              className="h-8 w-8 mr-3"
+              onError={(e) => {
+                // Fallback to icon if logo doesn't exist
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <Mail className="h-6 w-6 text-primary-400 mr-2 hidden" />
             <h1 className="text-xl font-semibold">NxtMail</h1>
           </div>
           {/* Close button for mobile */}
@@ -156,6 +168,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isMobileMenuOpen, onMobileMenuClose }
                         }
                       >
                         Escalated
+                      </NavLink>
+                    </li>
+                    <li>
+                      <NavLink 
+                        to="/tickets/manual" 
+                        onClick={handleNavClick}
+                        className={({ isActive }) => 
+                          `block py-2 text-sm ${
+                            isActive 
+                              ? 'text-primary-400 font-medium' 
+                              : 'text-neutral-400 hover:text-neutral-200'
+                          }`
+                        }
+                      >
+                        <div className="flex items-center">
+                          <Plus className="h-3 w-3 mr-1" />
+                          Manual Ticket
+                        </div>
                       </NavLink>
                     </li>
                   </ul>

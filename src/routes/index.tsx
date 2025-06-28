@@ -16,6 +16,7 @@ import TicketsAll from '../pages/TicketsAll';
 import TicketsNew from '../pages/TicketsNew';
 import TicketsEscalated from '../pages/TicketsEscalated';
 import TicketView from '../pages/TicketView';
+import ManualTicket from '../pages/ManualTicket';
 import EmailSetup from '../pages/EmailSetup';
 import Analytics from '../pages/Analytics';
 import Settings from '../pages/Settings';
@@ -97,6 +98,7 @@ const AppRoutes = () => {
             <Route path="/tickets/all" element={<TicketsAll />} />
             <Route path="/tickets/new" element={<TicketsNew />} />
             <Route path="/tickets/escalated" element={<TicketsEscalated />} />
+            <Route path="/tickets/manual" element={<ManualTicket />} />
             <Route path="/tickets/:id" element={<TicketView />} />
             <Route path="/email-setup" element={<EmailSetup />} />
             <Route path="/analytics" element={<Analytics />} />
