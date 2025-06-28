@@ -47,7 +47,7 @@ const PersonalSidebar: React.FC<PersonalSidebarProps> = ({ isMobileMenuOpen, onM
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold">NxtMail</h1>
+              <h1 className="text-lg font-semibold">Auxigent</h1>
               <p className="text-xs text-purple-200">Personal</p>
             </div>
           </div>

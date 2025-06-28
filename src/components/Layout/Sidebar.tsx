@@ -60,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isMobileMenuOpen, onMobileMenuClose }
           <div className="flex items-center">
             {/* Logo */}
             <img 
-              src="/logo.png" 
+              src="/logo.jpeg" 
               alt="Logo" 
               className="h-8 w-8 mr-3"
               onError={(e) => {
@@ -70,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isMobileMenuOpen, onMobileMenuClose }
               }}
             />
             <Mail className="h-6 w-6 text-primary-400 mr-2 hidden" />
-            <h1 className="text-xl font-semibold">NxtMail</h1>
+            <h1 className="text-xl font-semibold">Auxigent</h1>
           </div>
           {/* Close button for mobile */}
           <button
