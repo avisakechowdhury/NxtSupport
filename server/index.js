@@ -14,6 +14,13 @@ import User from './models/User.js';
 import PersonalUser from './models/PersonalUser.js';
 import Ticket from './models/Ticket.js';
 import TicketActivity from './models/TicketActivity.js';
+import ProcessedEmail from './models/ProcessedEmail.js';
+import NotificationService from './services/notificationService.js';
+import contactRoutes from './routes/contactRoutes.js';
+import emailRoutes, { setActiveEmailListeners } from './routes/emailRoutes.js';
+import directMailRoutes from './routes/directMailRoutes.js';
+import gmailSendRoutes from './routes/gmailSendRoutes.js';
+// import complaintCategoryRoutes from './routes/complaintCategoryRoutes.js';
 
 const app = express();
 
@@ -24,6 +31,8 @@ import teamRoutes from './routes/teamRoutes.js';
 import personalAuthRoutes from './routes/personalAuthRoutes.js';
 import personalEmailRoutes from './routes/personalEmailRoutes.js';
 import preferenceRoutes from './routes/preferenceRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 
 // Middleware
 const allowedOrigins = [
@@ -80,6 +89,7 @@ const authenticateToken = (req, res, next) => {
 
 // Global store for active email listeners (for business users)
 const activeEmailListeners = new Map();
+setActiveEmailListeners(activeEmailListeners);
 
 // Routes
 app.use('/api/auth', googleAuthRoutes);
@@ -89,6 +99,13 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/personal', personalEmailRoutes); // Personal routes handle auth internally
 app.use('/api/preferences', authenticateToken, preferenceRoutes); // Add this line
+app.use('/api/notifications', authenticateToken, notificationRoutes);
+app.use('/api/analytics', analyticsRoutes); // Analytics routes
+app.use('/api/contact', contactRoutes);
+app.use('/api/email', emailRoutes);
+app.use('/api/direct-mail', directMailRoutes);
+app.use('/api/gmail', gmailSendRoutes);
+// app.use('/api/complaint-categories', complaintCategoryRoutes);
 
 // Company email template update route
 app.patch('/api/company/email-template', authenticateToken, async (req, res) => {
@@ -97,7 +114,7 @@ app.patch('/api/company/email-template', authenticateToken, async (req, res) => 
       return res.status(403).json({ error: 'Only business accounts can update email templates' });
     }
 
-    const { subject, body, useCustomTemplate } = req.body;
+    const { subject, body, useCustomTemplate, selectedTemplate } = req.body;
     const { companyId } = req.user;
 
     const company = await Company.findById(companyId);
@@ -108,7 +125,8 @@ app.patch('/api/company/email-template', authenticateToken, async (req, res) => 
     company.emailTemplate = {
       subject: subject || company.emailTemplate?.subject || '[{{ticketNumber}}] We have received your support request',
       body: body || company.emailTemplate?.body || 'Default template body',
-      useCustomTemplate: useCustomTemplate !== undefined ? useCustomTemplate : false
+      useCustomTemplate: useCustomTemplate !== undefined ? useCustomTemplate : false,
+      selectedTemplate: selectedTemplate || company.emailTemplate?.selectedTemplate || 'formal'
     };
 
     await company.save();
@@ -123,6 +141,38 @@ app.patch('/api/company/email-template', authenticateToken, async (req, res) => 
   }
 });
 
+// Company customer portal settings update route
+app.patch('/api/company/customer-portal', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'business') {
+      return res.status(403).json({ error: 'Only business accounts can update customer portal settings' });
+    }
+
+    const { enabled, includeInEmails } = req.body;
+    const { companyId } = req.user;
+
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    company.customerPortal = {
+      enabled: enabled !== undefined ? enabled : true,
+      includeInEmails: includeInEmails !== undefined ? includeInEmails : true
+    };
+
+    await company.save();
+
+    res.json({ 
+      message: 'Customer portal settings updated successfully',
+      customerPortal: company.customerPortal
+    });
+  } catch (error) {
+    console.error('Error updating customer portal settings:', error);
+    res.status(500).json({ error: 'Failed to update customer portal settings' });
+  }
+});
+
 // Manual ticket creation route
 app.post('/api/tickets/manual', authenticateToken, async (req, res) => {
   try {
@@ -130,25 +180,45 @@ app.post('/api/tickets/manual', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Manual ticket creation only available for business accounts' });
     }
     
-    const ticketCount = await Ticket.countDocuments({ companyId: req.user.companyId });
-    const ticketNumber = `TKT-${(ticketCount + 1).toString().padStart(4, '0')}`;
-    
-    // Prepare ticket data and handle empty assignedTo field
-    const ticketData = {
-      ...req.body,
-      ticketNumber,
-      companyId: req.user.companyId,
-      status: 'new',
-      source: 'manual'
-    };
+    // Generate unique ticket number with retry logic
+    let ticketNumber;
+    let ticket;
+    let retryCount = 0;
+    const maxRetries = 5;
 
-    // Handle assignedTo field - convert empty string to null
-    if (ticketData.assignedTo === '' || ticketData.assignedTo === undefined) {
-      ticketData.assignedTo = null;
+    do {
+      const ticketCount = await Ticket.countDocuments({ companyId: req.user.companyId });
+      ticketNumber = `TKT-${(ticketCount + 1 + retryCount).toString().padStart(4, '0')}`;
+      
+      // Check if this ticket number already exists
+      const existingTicket = await Ticket.findOne({ ticketNumber });
+      if (!existingTicket) {
+        // Prepare ticket data and handle empty assignedTo field
+        const ticketData = {
+          ...req.body,
+          ticketNumber,
+          companyId: req.user.companyId,
+          status: 'new',
+          source: 'manual',
+          gmailMessageId: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` // Generate unique ID for manual tickets
+        };
+
+        // Handle assignedTo field - convert empty string to null
+        if (ticketData.assignedTo === '' || ticketData.assignedTo === undefined) {
+          ticketData.assignedTo = null;
+        }
+
+        ticket = new Ticket(ticketData);
+        await ticket.save();
+        break; // Successfully created ticket, exit loop
+      }
+      
+      retryCount++;
+    } while (retryCount < maxRetries);
+
+    if (!ticket) {
+      return res.status(500).json({ error: 'Failed to create ticket due to duplicate ticket numbers' });
     }
-
-    const ticket = new Ticket(ticketData);
-    await ticket.save();
     
     // Create ticket activity
     const activity = new TicketActivity({
@@ -156,9 +226,16 @@ app.post('/api/tickets/manual', authenticateToken, async (req, res) => {
       activityType: 'created',
       userId: req.user.id,
       userName: req.body.createdByName || 'System',
+      performedBy: req.body.createdByName || 'System',
       details: `Ticket created manually by ${req.body.createdByName || 'System'}`
     });
     await activity.save();
+    
+    // Create notifications for manual ticket creation
+    const createdBy = await User.findById(req.user.id);
+    if (createdBy) {
+      await NotificationService.createManualTicketNotification(ticket, createdBy);
+    }
     
     res.status(201).json(ticket);
   } catch (error) {
@@ -270,11 +347,13 @@ app.post('/api/auth/login', async (req, res) => {
       response.company = {
         id: user.companyId._id,
         name: user.companyId.name,
+        domain: user.companyId.domain, // <-- Add this line
         supportEmail: user.companyId.supportEmail,
         emailConnected: user.companyId.emailConnected,
         googleAuthConnected: !!(user.companyId.googleAuth && user.companyId.googleAuth.accessToken),
         googleEmail: user.companyId.googleAuth ? user.companyId.googleAuth.connectedEmail : null,
-        emailTemplate: user.companyId.emailTemplate
+        emailTemplate: user.companyId.emailTemplate,
+        customerPortal: user.companyId.customerPortal
       };
     }
     
@@ -298,11 +377,13 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         company = {
           id: user.companyId._id,
           name: user.companyId.name,
+          domain: user.companyId.domain, // <-- Add this line
           supportEmail: user.companyId.supportEmail,
           emailConnected: user.companyId.emailConnected,
           googleAuthConnected: !!(user.companyId.googleAuth && user.companyId.googleAuth.accessToken),
           googleEmail: user.companyId.googleAuth ? user.companyId.googleAuth.connectedEmail : null,
-          emailTemplate: user.companyId.emailTemplate
+          emailTemplate: user.companyId.emailTemplate,
+          customerPortal: user.companyId.customerPortal
         };
       }
     }
@@ -314,7 +395,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         id: user._id, 
         email: user.email, 
         name: user.name,
-        accountType: req.user.accountType
+        accountType: req.user.accountType,
+        createdAt: user.createdAt
       }
     };
     
@@ -331,6 +413,62 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error in /me endpoint:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Profile update endpoint (supports both user types)
+app.patch('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    
+    if (!name && !email) {
+      return res.status(400).json({ error: 'At least one field (name or email) is required' });
+    }
+    
+    let user;
+    
+    if (req.user.accountType === 'personal') {
+      user = await PersonalUser.findById(req.user.id);
+    } else {
+      user = await User.findById(req.user.id);
+    }
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Check if email is being changed and if it's already in use
+    if (email && email !== user.email) {
+      let existingUser;
+      if (req.user.accountType === 'personal') {
+        existingUser = await PersonalUser.findOne({ email });
+      } else {
+        existingUser = await User.findOne({ email });
+      }
+      
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already in use' });
+      }
+    }
+    
+    // Update user fields
+    if (name) user.name = name;
+    if (email) user.email = email;
+    
+    await user.save();
+    
+    res.json({ 
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        accountType: req.user.accountType
+      }
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
@@ -545,6 +683,58 @@ app.post('/api/tickets', authenticateToken, async (req, res) => {
   }
 });
 
+// Public ticket access endpoint (no authentication required)
+app.get('/api/tickets/public/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+    
+    // Find ticket by public token
+    const ticket = await Ticket.findOne({ publicToken: token })
+      .populate('assignedTo', 'name email')
+      .populate('comments.userId', 'name')
+      .populate('companyId', 'name');
+    
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found or invalid token' });
+    }
+    
+    // Format the response for public access
+    const publicTicket = {
+      _id: ticket._id,
+      ticketNumber: ticket.ticketNumber,
+      subject: ticket.subject,
+      body: ticket.body,
+      senderEmail: ticket.senderEmail,
+      senderName: ticket.senderName,
+      status: ticket.status,
+      priority: ticket.priority,
+      createdAt: ticket.createdAt,
+      updatedAt: ticket.updatedAt,
+      resolvedAt: ticket.resolvedAt,
+      escalatedAt: ticket.escalatedAt,
+      assignedTo: ticket.assignedTo ? {
+        name: ticket.assignedTo.name,
+        email: ticket.assignedTo.email
+      } : null,
+      comments: ticket.comments ? ticket.comments.map(comment => ({
+        userName: comment.userName,
+        text: comment.text,
+        createdAt: comment.createdAt
+      })) : [],
+      companyName: ticket.companyId?.name || 'Support Team'
+    };
+    
+    res.json(publicTicket);
+  } catch (error) {
+    console.error('Public ticket access error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Business Ticket Update Route
 app.put('/api/tickets/:id', authenticateToken, async (req, res) => {
   try {
@@ -594,6 +784,48 @@ app.get('/api/tickets/:id/activities', authenticateToken, async (req, res) => {
     res.json(activities);
   } catch (error) {
     console.error('Error fetching ticket activities:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Processed Emails Route (for debugging)
+app.get('/api/processed-emails', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'business') {
+      return res.status(403).json({ error: 'Processed emails only available for business accounts' });
+    }
+    
+    const processedEmails = await ProcessedEmail.find({ 
+      companyId: req.user.companyId 
+    })
+    .sort({ processedAt: -1 })
+    .limit(50)
+    .populate('ticketId', 'ticketNumber subject');
+    
+    res.json(processedEmails);
+  } catch (error) {
+    console.error('Error fetching processed emails:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Reset Processed Emails Route (for testing)
+app.delete('/api/processed-emails/reset', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'business') {
+      return res.status(403).json({ error: 'Reset only available for business accounts' });
+    }
+    
+    const result = await ProcessedEmail.deleteMany({ 
+      companyId: req.user.companyId 
+    });
+    
+    res.json({ 
+      message: `Reset ${result.deletedCount} processed email records`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Error resetting processed emails:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

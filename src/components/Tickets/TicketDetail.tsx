@@ -1,778 +1,449 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  CheckCircle, 
-  ArrowUpCircle, 
-  MessageSquare, 
-  AlertTriangle, 
-  User,
-  Clock,
-  Clipboard,
-  Languages,
-  UserCheck,
-  Plus,
-  Edit,
-  Save,
-  X
-} from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
 import { useTicketStore } from '../../store/ticketStore';
 import { useTeamStore } from '../../store/teamStore';
 import { useAuthStore } from '../../store/authStore';
+import { User } from '../../types';
+import { User as UserIcon, Mail, ChevronDown, Send, CheckCircle, AlertTriangle, ArrowLeft, Plus, UserPlus, Loader2, Mail as MailIcon, Sparkles } from 'lucide-react';
+import axios from 'axios';
+
+function stripQuotedText(text: string) {
+  return text.split(/On\s.+wrote:|From:.+\n|-----Original Message-----/)[0].trim();
+}
+function filterDuplicates(activities: any[]) {
+  const seen = new Set();
+  return activities.filter((a) => {
+    const key = a.content ? a.content.trim() : a.details;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function stripHtml(html: string) {
+  if (!html) return '';
+  return html.replace(/<[^>]+>/g, '').replace(/\n{2,}/g, '\n').trim();
+}
 
 const TicketDetail = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { 
-    currentTicket, 
-    activities, 
-    fetchTicketById, 
-    fetchTicketActivities, 
-    generateAIResponse,
-    escalateTicket,
-    resolveTicket,
+  const {
+    fetchTicketById,
+    fetchTicketActivities,
+    currentTicket,
+    activities,
+    updateTicketStatus,
     assignTicket,
-    addNote,
+    addComment,
+    isLoading,
     updateTicketPriority,
-    isLoading 
   } = useTicketStore();
-  
   const { members, fetchTeamMembers } = useTeamStore();
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [selectedMember, setSelectedMember] = useState('');
-  const [escalationReason, setEscalationReason] = useState('');
-  const [showEscalateForm, setShowEscalateForm] = useState(false);
-  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
-  const [responseConfidence, setResponseConfidence] = useState(0);
-  const [showNoteForm, setShowNoteForm] = useState(false);
-  const [noteText, setNoteText] = useState('');
-  const [showPriorityEdit, setShowPriorityEdit] = useState(false);
-  const [newPriority, setNewPriority] = useState('');
+
+  const [note, setNote] = useState('');
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [priorityEdit, setPriorityEdit] = useState(false);
+  const [priorityLoading, setPriorityLoading] = useState(false);
+  const [showMailModal, setShowMailModal] = useState(false);
+  const [mailTo, setMailTo] = useState(currentTicket?.senderEmail || '');
+  const [mailSubject, setMailSubject] = useState('');
+  const [mailBody, setMailBody] = useState('');
+  const [sendingMail, setSendingMail] = useState(false);
+
+  // Priority color map
+  const priorityColors: Record<string, string> = {
+    low: 'bg-blue-100 text-blue-700',
+    medium: 'bg-yellow-100 text-yellow-800',
+    high: 'bg-red-100 text-red-700',
+    urgent: 'bg-purple-100 text-purple-700',
+  };
+
+  // Priority update handler
+  const handlePriorityUpdate = async (newPriority: string) => {
+    if (!id || !currentTicket || currentTicket.priority === newPriority) return;
+    setPriorityLoading(true);
+    await updateTicketPriority(id, newPriority);
+    await fetchTicketById(id);
+    setPriorityLoading(false);
+    setPriorityEdit(false);
+  };
+
+  // AI generation handlers (mocked)
+  const handleAIGenerateEmail = () => {
+    setMailBody('Dear Customer,\n\nThank you for reaching out. We are looking into your issue and will get back to you shortly.\n\nBest regards,\nSupport Team');
+  };
+  const handleAIGenerateComment = () => {
+    setNote('AI Suggestion: Please follow up with the customer regarding their recent inquiry.');
+  };
+  const API_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
+  const handleSendMail = async () => {
+    setSendingMail(true);
+    console.log('Gmail API: Sending email', { to: mailTo, subject: mailSubject, body: mailBody });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/gmail/send`,
+        {
+          to: mailTo,
+          subject: mailSubject,
+          body: mailBody,
+          ticketId: currentTicket?._id,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      console.log('Gmail API: Email sent response', response.data);
+      alert('Email sent successfully!');
+      setShowMailModal(false);
+      setMailTo(currentTicket?.senderEmail || '');
+      setMailSubject('');
+      setMailBody('');
+      // Refresh activities after sending
+      if (currentTicket?._id) await fetchTicketActivities(currentTicket._id);
+    } catch (error) {
+      console.error('Gmail API: Failed to send email', error);
+      alert('Failed to send email. Please check the console for details.');
+    } finally {
+      setSendingMail(false);
+    }
+  };
 
   useEffect(() => {
     if (id) {
       fetchTicketById(id);
       fetchTicketActivities(id);
-      fetchTeamMembers();
     }
+    fetchTeamMembers();
   }, [id, fetchTicketById, fetchTicketActivities, fetchTeamMembers]);
 
-  const handleGenerateResponse = async () => {
-    if (!id) return;
-    
-    setIsGeneratingResponse(true);
-    await generateAIResponse(id);
-    setIsGeneratingResponse(false);
-    
-    setResponseConfidence(Math.floor(Math.random() * 23) + 75);
+  const handleStatusChange = async (status: string) => {
+    setActionLoading(true);
+    await updateTicketStatus(id!, status);
+    await fetchTicketById(id!);
+    await fetchTicketActivities(id!);
+    setActionLoading(false);
   };
 
-  const handleEscalate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!id || !escalationReason) return;
-    
-    await escalateTicket(id, escalationReason);
-    setShowEscalateForm(false);
-    setEscalationReason('');
+  const handleAssign = async (userId: string) => {
+    setAssignLoading(true);
+    await assignTicket(id!, userId);
+    await fetchTicketById(id!);
+    setAssignLoading(false);
+    setAssignOpen(false);
   };
 
-  const handleResolve = async () => {
-    if (!id) return;
-    await resolveTicket(id);
+  const handleAddNote = async () => {
+    if (!note.trim()) return;
+    await addComment(id!, note);
+    setNote('');
+    await fetchTicketActivities(id!);
   };
 
-  const handleAssign = async () => {
-    if (!id || !selectedMember) return;
-    await assignTicket(id, selectedMember);
-    setShowAssignModal(false);
-    setSelectedMember('');
-  };
-
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!id || !noteText.trim()) return;
-    
-    await addNote(id, noteText);
-    setShowNoteForm(false);
-    setNoteText('');
-    // Refresh activities to show the new note
-    fetchTicketActivities(id);
-  };
-
-  const handlePriorityUpdate = async () => {
-    if (!id || !newPriority) return;
-    
-    await updateTicketPriority(id, newPriority);
-    setShowPriorityEdit(false);
-    setNewPriority('');
-    // Refresh activities to show the priority change
-    fetchTicketActivities(id);
-  };
-
-  const renderTicketContent = () => {
-    if (!currentTicket) return null;
-
-    // For manual tickets, show the description instead of email content
-    if (currentTicket.source === 'manual') {
-      return (
-        <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 mb-6">
-          <div className="flex items-start mb-3">
-            <div className="flex-shrink-0">
-              <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                <User className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-neutral-900">
-                {currentTicket.senderName} <span className="text-neutral-500 font-normal">&lt;{currentTicket.senderEmail}&gt;</span>
-              </p>
-              <p className="text-xs text-neutral-500">
-                {format(new Date(currentTicket.createdAt), "MMM d, yyyy 'at' h:mm a")}
-              </p>
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mt-1">
-                Manual Ticket
-              </span>
-            </div>
-          </div>
-          
-          <div className="prose prose-sm max-w-none">
-            <h4 className="text-sm font-medium text-neutral-900 mb-2">Subject:</h4>
-            <p className="text-neutral-700 mb-3">{currentTicket.subject}</p>
-            
-            <h4 className="text-sm font-medium text-neutral-900 mb-2">Description:</h4>
-            <div className="whitespace-pre-line text-neutral-700">{currentTicket.body}</div>
-          </div>
-        </div>
-      );
-    }
-
-    // For email tickets, render the email content
-    return (
-      <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 mb-6">
-        <div className="flex items-start mb-3">
-          <div className="flex-shrink-0">
-            <div className="h-10 w-10 rounded-full bg-neutral-200 flex items-center justify-center">
-              <User className="h-6 w-6 text-neutral-500" />
-            </div>
-          </div>
-          <div className="ml-3">
-            <p className="text-sm font-medium text-neutral-900">
-              {currentTicket.senderName} <span className="text-neutral-500 font-normal">&lt;{currentTicket.senderEmail}&gt;</span>
-            </p>
-            <p className="text-xs text-neutral-500">
-              {format(new Date(currentTicket.createdAt), "MMM d, yyyy 'at' h:mm a")}
-            </p>
-          </div>
-        </div>
-        
-        <div className="prose prose-sm max-w-none">
-          {renderEmailBody(currentTicket.body)}
-        </div>
-      </div>
+  // Reverse activities so newest is at the top
+  const filteredActivities = useMemo(() => {
+    if (!activities) return [];
+    return filterDuplicates(
+      [...activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     );
+  }, [activities]);
+
+  const isClosed = currentTicket?.status === 'resolved' || currentTicket?.status === 'escalated';
+
+  // When opening the modal, always set mailTo to currentTicket?.senderEmail
+  const openMailModal = () => {
+    if (currentTicket?.senderEmail) setMailTo(currentTicket.senderEmail);
+    setShowMailModal(true);
   };
-
-  const renderEmailBody = (body: string) => {
-    if (!body) return <p className="text-neutral-500">No content available</p>;
-    
-    // Check if it's HTML content
-    const isHTML = /<[a-z][\s\S]*>/i.test(body);
-    
-    if (isHTML) {
-      return (
-        <div 
-          className="prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: body }}
-          style={{
-            wordBreak: 'break-word',
-            overflowWrap: 'break-word'
-          }}
-        />
-      );
-    } else {
-      // Plain text - preserve line breaks
-      return (
-        <pre className="whitespace-pre-wrap font-sans text-sm text-neutral-700">
-          {body}
-        </pre>
-      );
-    }
-  };
-
-  const isTicketResolved = currentTicket?.status === 'resolved' || currentTicket?.status === 'closed';
-
-  if (isLoading || !currentTicket) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
-      </div>
-    );
-  }
 
   return (
-    <div className="bg-white shadow-card rounded-lg overflow-hidden">
-      <div className="p-6 border-b border-neutral-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <button
-              className="mr-4 text-neutral-500 hover:text-neutral-700"
-              onClick={() => navigate('/tickets/all')}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h2 className="text-lg font-medium text-neutral-900">
-              Ticket {currentTicket.ticketNumber}
-            </h2>
+    <div className="min-h-screen bg-gradient-to-r from-yellow-100 via-orange-100 to-white p-6">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-8">
+        {/* Left: Main Card */}
+        <div className="flex-1">
+          {/* Back Button */}
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center text-gray-500 hover:text-gray-700 mb-6"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2" />
+            Back
+          </button>
+          <div className="bg-white rounded-3xl shadow-2xl p-8 relative">
+            {/* Top Bar: Ticket Info */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-2">{currentTicket?.ticketNumber}</h2>
+              <div className="flex gap-2 mb-2">
+                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                  {(currentTicket?.priority ? currentTicket.priority.charAt(0).toUpperCase() + currentTicket.priority.slice(1) : 'Low')}
+                </span>
+                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                  {currentTicket?.status || 'New'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Mail className="w-4 h-4" />
+                <span>{currentTicket?.senderEmail}</span>
+                <span>•</span>
+                <span>{new Date(currentTicket?.createdAt || '').toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Ticket Body */}
+            <div className="mb-8 p-6 bg-gray-50 rounded-xl shadow-inner">
+              <div className="flex items-center mb-2">
+                <UserIcon className="w-6 h-6 text-gray-400 mr-2" />
+                <span className="font-semibold">{currentTicket?.senderName}</span>
+              </div>
+              <div className="text-gray-800 whitespace-pre-line">{stripHtml(currentTicket?.body || '')}</div>
+            </div>
+
+            {/* Activity Timeline (timeline style) */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Activity</h3>
+              <div className="relative flex flex-col gap-8 pl-8">
+                {/* Vertical line */}
+                <div className="absolute left-2 top-6 bottom-0 w-0.5 bg-blue-200 z-0" />
+                {filteredActivities.map((activity, idx) => {
+                  const isCustomerReply = activity.activityType === 'reply' && activity.userName !== user?.name;
+                  const isComment = activity.activityType === 'comment';
+                  const replyBody = isCustomerReply ? stripHtml(stripQuotedText(activity.content || '')) : '';
+                  const commentBody = isComment ? stripHtml(activity.content || activity.details || '') : '';
+                  return (
+                    <div key={activity._id || idx} className="relative flex items-start gap-3 z-10">
+                      {/* Timeline check icon */}
+                      <div className="flex flex-col items-center">
+                        <span className="bg-blue-500 text-white rounded-full p-1 shadow"><CheckCircle className="w-4 h-4" /></span>
+                      </div>
+                      <div className={`max-w-xl flex flex-col ${isCustomerReply ? 'self-start' : isComment ? 'self-end' : 'self-start'}`}>
+                        <div className={`rounded-2xl px-5 py-3 shadow-sm mb-1 ${isCustomerReply ? 'bg-yellow-100 border-l-4 border-yellow-400' : isComment ? 'bg-blue-100 border-l-4 border-blue-400' : 'bg-gray-100'}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <UserIcon className="w-5 h-5 text-gray-400" />
+                            <span className={`font-semibold ${isCustomerReply ? 'text-yellow-800' : isComment ? 'text-blue-800' : 'text-gray-700'}`}>{activity.userName}</span>
+                            <span className="text-xs text-gray-400 ml-2">{new Date(activity.createdAt).toLocaleString()}</span>
+                          </div>
+                          <div className="text-gray-800 whitespace-pre-line">
+                            {isCustomerReply && <span className="font-medium text-yellow-900">Customer replied:</span>}
+                            {isCustomerReply && replyBody}
+                            {isComment && <span className="font-medium text-blue-900">Comment:</span>}
+                            {isComment && commentBody}
+                            {!isCustomerReply && !isComment && (activity.details || activity.content)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          
-          <div className="flex space-x-3">
-            {!isTicketResolved && (
-              <button
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500"
-                onClick={handleResolve}
-              >
-                <CheckCircle className="h-4 w-4 mr-1" />
-                Resolve
-              </button>
+        </div>
+        {/* Right: Sticky Info Panel */}
+        <div className="w-full md:w-80 flex-shrink-0">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sticky top-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Ticket Information</h3>
+            <div className="mb-2">
+              <span className="block text-sm text-gray-500">Status</span>
+              <span className="block text-base font-medium text-gray-900">{currentTicket?.status ? currentTicket.status.charAt(0).toUpperCase() + currentTicket.status.slice(1) : 'New'}</span>
+            </div>
+            <div className="mb-2">
+              <span className="block text-sm text-gray-500">Priority</span>
+              {(!isClosed && !priorityEdit) ? (
+                <button
+                  className={`mt-1 px-3 py-1 rounded-full text-sm font-bold cursor-pointer border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 transition ${priorityColors[currentTicket?.priority || 'low']}`}
+                  onClick={() => setPriorityEdit(true)}
+                  disabled={priorityLoading}
+                >
+                  {priorityLoading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (currentTicket?.priority ? currentTicket.priority.charAt(0).toUpperCase() + currentTicket.priority.slice(1) : 'Low')}
+                </button>
+              ) : (!isClosed && priorityEdit) ? (
+                <select
+                  className="mt-1 px-3 py-1 rounded-full text-sm font-bold border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={currentTicket?.priority || 'low'}
+                  onChange={e => handlePriorityUpdate(e.target.value)}
+                  onBlur={() => setPriorityEdit(false)}
+                  autoFocus
+                  disabled={priorityLoading}
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              ) : (
+                <span className={`mt-1 px-3 py-1 rounded-full text-sm font-bold ${priorityColors[currentTicket?.priority || 'low']}`}>{currentTicket?.priority ? currentTicket.priority.charAt(0).toUpperCase() + currentTicket.priority.slice(1) : 'Low'}</span>
+              )}
+            </div>
+            <div className="mb-2">
+              <span className="block text-sm text-gray-500">Created</span>
+              <span className="block text-base font-medium text-gray-900">{currentTicket?.createdAt ? new Date(currentTicket.createdAt).toLocaleString() : ''}</span>
+            </div>
+            <div className="mb-2 relative">
+              <span className="block text-sm text-gray-500">Assigned To</span>
+              <span className="block text-base font-medium text-gray-900">
+                {currentTicket?.assignedTo
+                  ? typeof currentTicket.assignedTo === 'object'
+                    ? `${(currentTicket.assignedTo as User).name} (${(currentTicket.assignedTo as User).role || 'Agent'})`
+                    : 'Support Agent'
+                  : 'Unassigned'}
+              </span>
+              {/* Assign button below Assigned To, only if not closed */}
+              {!isClosed && (
+                <>
+                  <button
+                    className="w-full flex items-center justify-center gap-2 rounded-full bg-blue-500 text-white font-bold py-2 shadow hover:bg-blue-600 transition mb-2"
+                    onClick={() => setAssignOpen((v) => !v)}
+                    disabled={assignLoading}
+                  >
+                    <UserPlus className="w-5 h-5" /> Assign
+                  </button>
+                  {/* Assign dropdown */}
+                  {assignOpen && (
+                    <div className="absolute z-10 mt-2 bg-white border rounded-lg shadow-lg w-48">
+                      {members.map((member: User) => (
+                        <button
+                          key={member._id}
+                          className="w-full text-left px-4 py-2 hover:bg-blue-50"
+                          onClick={() => handleAssign(member._id)}
+                        >
+                          {member.name} ({member.role})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="mb-2">
+              <span className="block text-sm text-gray-500">Language</span>
+              <span className="block text-base font-medium text-gray-900">{currentTicket?.originalLanguage === 'en' ? 'English' : currentTicket?.originalLanguage?.toUpperCase() || ''}</span>
+            </div>
+            <div className="mb-4">
+              <span className="block text-sm text-gray-500">AI Confidence</span>
+              <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${Math.round((currentTicket?.aiConfidence || 0) * 100)}%` }}></div>
+              </div>
+              <span className="block text-xs text-gray-700 mt-1">Classification {Math.round((currentTicket?.aiConfidence || 0) * 100)}%</span>
+            </div>
+            {/* Resolve and Escalate buttons side by side, only if not closed */}
+            {!isClosed && (
+              <div className="flex gap-2 mb-4">
+                <button
+                  className="flex-1 flex items-center justify-center gap-2 rounded-full bg-green-500 text-white font-bold py-2 shadow hover:bg-green-600 transition"
+                  onClick={() => handleStatusChange('resolved')}
+                  disabled={actionLoading || isLoading}
+                >
+                  <CheckCircle className="w-5 h-5" /> Resolve
+                </button>
+                <button
+                  className="flex-1 flex items-center justify-center gap-2 rounded-full bg-orange-500 text-white font-bold py-2 shadow hover:bg-orange-600 transition"
+                  onClick={() => handleStatusChange('escalated')}
+                  disabled={actionLoading || isLoading}
+                >
+                  <AlertTriangle className="w-5 h-5" /> Escalate
+                </button>
+              </div>
             )}
-            
-            {currentTicket.status !== 'escalated' && !isTicketResolved && (
-              <button
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500"
-                onClick={() => setShowEscalateForm(true)}
-              >
-                <ArrowUpCircle className="h-4 w-4 mr-1" />
-                Escalate
-              </button>
-            )}
-            
-            {!currentTicket.assignedTo && !isTicketResolved && (
-              <button
-                className="inline-flex items-center px-3 py-1.5 border border-neutral-300 text-xs font-medium rounded text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                onClick={() => setShowAssignModal(true)}
-              >
-                <User className="h-4 w-4 mr-1" />
-                Assign
-              </button>
+            {/* Add Note input in right panel, only if not closed */}
+            {!isClosed && (
+              <div className="flex flex-col items-center gap-2 mb-2">
+                <div className="flex w-full gap-2">
+                  <input
+                    className="flex-1 px-4 py-2 rounded-lg border border-blue-400 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                    placeholder="Add a note..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddNote(); }}
+                    disabled={isLoading}
+                  />
+                  <button
+                    className="p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 flex items-center justify-center"
+                    type="button"
+                    title="AI Generated Comment"
+                    onClick={handleAIGenerateComment}
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </button>
+                </div>
+                <button
+                  className="w-12 h-12 rounded-full bg-blue-500 text-white font-semibold flex items-center justify-center transition-transform duration-200 hover:scale-110 hover:shadow-lg hover:bg-blue-600"
+                  onClick={handleAddNote}
+                  disabled={isLoading}
+                  type="button"
+                >
+                  <Plus className="w-6 h-6" />
+                </button>
+                {/* Quick Mail Button */}
+                <button
+                  className="mt-2 w-full flex items-center justify-center gap-2 rounded-full bg-indigo-500 text-white font-bold py-2 shadow hover:bg-indigo-600 transition"
+                  onClick={() => { console.log('Quick Mail: Modal opened'); openMailModal(); }}
+                  type="button"
+                >
+                  <MailIcon className="w-5 h-5" /> Quick Mail
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
-      
-      {/* Assignment Modal */}
-      {showAssignModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium text-neutral-900 mb-4">Assign Ticket</h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Select Team Member
-              </label>
-              <select
-                value={selectedMember}
-                onChange={(e) => setSelectedMember(e.target.value)}
-                className="block w-full rounded-md border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              >
-                <option value="">Select a team member</option>
-                {members.map((member) => (
-                  <option key={member._id} value={member._id}>
-                    {member.name} ({member.role})
-                  </option>
-                ))}
-              </select>
+      {/* Floating Mail Composer Modal */}
+      {showMailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative animate-fadeIn">
+            <button
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-xl font-bold"
+              onClick={() => setShowMailModal(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><MailIcon className="w-6 h-6" />Send Quick Email</h2>
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+              <input
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-400 focus:outline-none bg-gray-100 cursor-not-allowed"
+                value={mailTo}
+                readOnly
+              />
             </div>
-            <div className="flex justify-end space-x-3">
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+              <input
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+                value={mailSubject}
+                onChange={e => setMailSubject(e.target.value)}
+              />
+            </div>
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Body</label>
+              <textarea
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-400 focus:outline-none min-h-[100px]"
+                value={mailBody}
+                onChange={e => setMailBody(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 mb-4">
               <button
-                type="button"
-                onClick={() => setShowAssignModal(false)}
-                className="px-4 py-2 border border-neutral-300 rounded-md text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                className="flex-1 flex items-center justify-center gap-2 rounded-full bg-indigo-500 text-white font-bold py-2 shadow hover:bg-indigo-600 transition"
+                onClick={handleSendMail}
+                disabled={sendingMail}
               >
-                Cancel
+                {sendingMail ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} Send
               </button>
               <button
+                className="flex-1 flex items-center justify-center gap-2 rounded-full bg-blue-100 text-blue-700 font-bold py-2 shadow hover:bg-blue-200 transition"
+                onClick={handleAIGenerateEmail}
                 type="button"
-                onClick={handleAssign}
-                disabled={!selectedMember}
-                className="px-4 py-2 border border-transparent rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
               >
-                Assign
+                <Sparkles className="w-5 h-5" /> AI Generate Email
               </button>
             </div>
           </div>
         </div>
       )}
-      
-      <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left column - Ticket details */}
-          <div className="md:col-span-2">
-            <div>
-              <h3 className="text-lg font-medium text-neutral-900 mb-2">
-                {currentTicket.subject}
-              </h3>
-              
-              <div className="flex flex-wrap gap-2 mb-4">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  currentTicket.status === 'escalated' 
-                    ? 'bg-warning-100 text-warning-800' 
-                    : currentTicket.status === 'resolved' || currentTicket.status === 'responded'
-                    ? 'bg-success-100 text-success-800'
-                    : 'bg-primary-100 text-primary-800'
-                }`}>
-                  {currentTicket.status.charAt(0).toUpperCase() + currentTicket.status.slice(1)}
-                </span>
-                
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  currentTicket.priority === 'urgent' 
-                    ? 'bg-error-100 text-error-800' 
-                    : currentTicket.priority === 'high'
-                    ? 'bg-warning-100 text-warning-800'
-                    : currentTicket.priority === 'medium'
-                    ? 'bg-primary-100 text-primary-800'
-                    : 'bg-neutral-100 text-neutral-800'
-                }`}>
-                  {currentTicket.priority.charAt(0).toUpperCase() + currentTicket.priority.slice(1)} Priority
-                </span>
-                
-                {currentTicket.originalLanguage !== 'en' && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800">
-                    <Languages className="h-3 w-3 mr-1" />
-                    {currentTicket.originalLanguage.toUpperCase()}
-                  </span>
-                )}
-
-                {currentTicket.source === 'manual' && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                    Created Manually
-                  </span>
-                )}
-              </div>
-              
-              {renderTicketContent()}
-              
-              {showEscalateForm && !isTicketResolved && (
-                <div className="bg-warning-50 p-4 rounded-lg border border-warning-200 mb-6 animate-fade-in">
-                  <h4 className="text-sm font-medium text-warning-800 mb-2">Escalate Ticket</h4>
-                  <form onSubmit={handleEscalate}>
-                    <label className="block text-sm text-warning-700 mb-1">
-                      Reason for escalation
-                    </label>
-                    <textarea
-                      className="block w-full rounded-md border-warning-300 shadow-sm focus:border-warning-500 focus:ring-warning-500 sm:text-sm mb-3"
-                      rows={3}
-                      value={escalationReason}
-                      onChange={(e) => setEscalationReason(e.target.value)}
-                      required
-                    ></textarea>
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-3 py-2 border border-neutral-300 shadow-sm text-sm leading-4 font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                        onClick={() => setShowEscalateForm(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-warning-600 hover:bg-warning-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-warning-500"
-                      >
-                        Escalate
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-              
-              {currentTicket.responseText ? (
-                <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 mb-6">
-                  <div className="flex items-start mb-3">
-                    <div className="flex-shrink-0">
-                      <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                        <MessageSquare className="h-6 w-6 text-primary-600" />
-                      </div>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-neutral-900">
-                        AI Response
-                      </p>
-                      <p className="text-xs text-neutral-500">
-                        {currentTicket.responseGeneratedAt ? format(new Date(currentTicket.responseGeneratedAt), "MMM d, yyyy 'at' h:mm a") : 'Generated automatically'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="prose prose-sm max-w-none">
-                    <p className="whitespace-pre-line">{currentTicket.responseText}</p>
-                  </div>
-                  
-                  <div className="mt-3 flex justify-between">
-                    <div className="flex items-center text-xs text-neutral-500">
-                      <div className="flex items-center">
-                        <span className="mr-1">Confidence:</span>
-                        <div className="bg-neutral-200 rounded-full h-2 w-20">
-                          <div 
-                            className={`rounded-full h-2 ${
-                              currentTicket.aiConfidence > 0.9 
-                                ? 'bg-success-500' 
-                                : currentTicket.aiConfidence > 0.7 
-                                ? 'bg-primary-500' 
-                                : 'bg-warning-500'
-                            }`}
-                            style={{ width: `${currentTicket.aiConfidence * 100}%` }}
-                          ></div>
-                        </div>
-                        <span className="ml-1">{Math.round(currentTicket.aiConfidence * 100)}%</span>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <button className="text-xs text-primary-600 hover:text-primary-800" title="Copy to clipboard">
-                        <Clipboard className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                !isTicketResolved && (
-                  <div className="flex justify-center mb-6">
-                    <button
-                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      onClick={handleGenerateResponse}
-                      disabled={isGeneratingResponse}
-                    >
-                      {isGeneratingResponse ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Generating AI Response...
-                        </>
-                      ) : (
-                        <>
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          Generate AI Response
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )
-              )}
-              
-              <div className="border-t border-neutral-200 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-neutral-900">Activity Log</h4>
-                  {!isTicketResolved && (
-                    <button
-                      onClick={() => setShowNoteForm(true)}
-                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Note
-                    </button>
-                  )}
-                </div>
-
-                {/* Add Note Form */}
-                {showNoteForm && (
-                  <div className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
-                    <form onSubmit={handleAddNote}>
-                      <label className="block text-sm font-medium text-neutral-700 mb-2">
-                        Add Note
-                      </label>
-                      <textarea
-                        className="block w-full rounded-md border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm mb-3"
-                        rows={3}
-                        value={noteText}
-                        onChange={(e) => setNoteText(e.target.value)}
-                        placeholder="Add a note about this ticket..."
-                        required
-                      ></textarea>
-                      <div className="flex justify-end space-x-2">
-                        <button
-                          type="button"
-                          className="inline-flex items-center px-3 py-2 border border-neutral-300 shadow-sm text-sm leading-4 font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50"
-                          onClick={() => {
-                            setShowNoteForm(false);
-                            setNoteText('');
-                          }}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
-                        >
-                          Add Note
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-
-                <div className="flow-root">
-                  <ul className="-mb-8">
-                    {activities.map((activity, activityIdx) => (
-                      <li key={activity._id}>
-                        <div className="relative pb-8">
-                          {activityIdx !== activities.length - 1 ? (
-                            <span
-                              className="absolute top-5 left-5 -ml-px h-full w-0.5 bg-neutral-200"
-                              aria-hidden="true"
-                            ></span>
-                          ) : null}
-                          <div className="relative flex items-start space-x-3">
-                            <div>
-                              <div className="relative px-1">
-                                <div className="h-8 w-8 bg-neutral-100 rounded-full ring-8 ring-white flex items-center justify-center">
-                                  {activity.activityType === 'created' && (
-                                    <Clock className="h-4 w-4 text-neutral-500" />
-                                  )}
-                                  {activity.activityType === 'statusChanged' && (
-                                    <Clock className="h-4 w-4 text-neutral-500" />
-                                  )}
-                                  {activity.activityType === 'responded' && (
-                                    <MessageSquare className="h-4 w-4 text-primary-500" />
-                                  )}
-                                  {activity.activityType === 'escalated' && (
-                                    <AlertTriangle className="h-4 w-4 text-warning-500" />
-                                  )}
-                                  {activity.activityType === 'assigned' && (
-                                    <User className="h-4 w-4 text-primary-500" />
-                                  )}
-                                  {activity.activityType === 'note' && (
-                                    <MessageSquare className="h-4 w-4 text-neutral-500" />
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div>
-                                <div className="text-sm">
-                                  <span className="font-medium text-neutral-900">
-                                    {activity.userName || 'System'}
-                                  </span>
-                                </div>
-                                <p className="mt-0.5 text-sm text-neutral-500">
-                                  {formatDistanceToNow(new Date(activity.createdAt))} ago
-                                </p>
-                              </div>
-                              <div className="mt-2 text-sm text-neutral-700">
-                                <p>{activity.details}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Right column - Metadata */}
-          <div className="md:col-span-1">
-            <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200">
-              <h4 className="text-sm font-medium text-neutral-900 mb-3">Ticket Information</h4>
-              
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-neutral-500">Status</p>
-                  <p className="text-sm font-medium text-neutral-900">
-                    {currentTicket.status.charAt(0).toUpperCase() + currentTicket.status.slice(1)}
-                  </p>
-                </div>
-                
-                <div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-neutral-500">Priority</p>
-                    {!isTicketResolved && (
-                      <button
-                        onClick={() => {
-                          setShowPriorityEdit(true);
-                          setNewPriority(currentTicket.priority);
-                        }}
-                        className="text-xs text-primary-600 hover:text-primary-800"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                  {showPriorityEdit ? (
-                    <div className="mt-1">
-                      <select
-                        value={newPriority}
-                        onChange={(e) => setNewPriority(e.target.value)}
-                        className="block w-full text-xs rounded border-neutral-300 focus:border-primary-500 focus:ring-primary-500"
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                      </select>
-                      <div className="flex justify-end space-x-1 mt-1">
-                        <button
-                          onClick={() => setShowPriorityEdit(false)}
-                          className="text-xs text-neutral-500 hover:text-neutral-700"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={handlePriorityUpdate}
-                          className="text-xs text-primary-600 hover:text-primary-800"
-                        >
-                          <Save className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm font-medium text-neutral-900">
-                      {currentTicket.priority.charAt(0).toUpperCase() + currentTicket.priority.slice(1)}
-                    </p>
-                  )}
-                </div>
-                
-                <div>
-                  <p className="text-xs text-neutral-500">Created</p>
-                  <p className="text-sm font-medium text-neutral-900">
-                    {format(new Date(currentTicket.createdAt), "MMM d, yyyy 'at' h:mm a")}
-                  </p>
-                </div>
-                
-                {currentTicket.assignedTo && (
-                  <div>
-                    <p className="text-xs text-neutral-500">Assigned To</p>
-                    <p className="text-sm font-medium text-neutral-900">
-                      {typeof currentTicket.assignedTo === 'object' 
-                        ? currentTicket.assignedTo.name 
-                        : 'Support Agent'}
-                    </p>
-                  </div>
-                )}
-                
-                {currentTicket.escalatedAt && (
-                  <div>
-                    <p className="text-xs text-neutral-500">Escalated At</p>
-                    <p className="text-sm font-medium text-neutral-900">
-                      {format(new Date(currentTicket.escalatedAt), "MMM d, yyyy 'at' h:mm a")}
-                    </p>
-                  </div>
-                )}
-                
-                {currentTicket.resolvedAt && (
-                  <div>
-                    <p className="text-xs text-neutral-500">Resolved At</p>
-                    <p className="text-sm font-medium text-neutral-900">
-                      {format(new Date(currentTicket.resolvedAt), "MMM d, yyyy 'at' h:mm a")}
-                    </p>
-                  </div>
-                )}
-                
-                <div>
-                  <p className="text-xs text-neutral-500">Language</p>
-                  <div className="flex items-center text-sm font-medium text-neutral-900">
-                    {currentTicket.originalLanguage === 'en' ? 'English' : currentTicket.originalLanguage === 'fr' ? 'French' : currentTicket.originalLanguage.toUpperCase()}
-                    {currentTicket.originalLanguage !== 'en' && (
-                      <span className="ml-1 text-xs text-neutral-500">(Auto-translated)</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-neutral-200">
-                <h4 className="text-sm font-medium text-neutral-900 mb-3">AI Confidence</h4>
-                
-                <div className="space-y-2">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-neutral-500">Classification</p>
-                      <p className="text-xs font-medium text-neutral-700">
-                        {Math.round(currentTicket.aiConfidence * 100)}%
-                      </p>
-                    </div>
-                    <div className="w-full bg-neutral-200 rounded-full h-1.5 mt-1">
-                      <div 
-                        className={`h-1.5 rounded-full ${
-                          currentTicket.aiConfidence > 0.9 
-                            ? 'bg-success-500' 
-                            : currentTicket.aiConfidence > 0.75 
-                            ? 'bg-primary-500' 
-                            : 'bg-warning-500'
-                        }`}
-                        style={{ width: `${currentTicket.aiConfidence * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                  
-                  {responseConfidence > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-neutral-500">Response</p>
-                        <p className="text-xs font-medium text-neutral-700">
-                          {responseConfidence}%
-                        </p>
-                      </div>
-                      <div className="w-full bg-neutral-200 rounded-full h-1.5 mt-1">
-                        <div 
-                          className={`h-1.5 rounded-full ${
-                            responseConfidence > 90 
-                              ? 'bg-success-500' 
-                              : responseConfidence > 80 
-                              ? 'bg-primary-500' 
-                              : 'bg-warning-500'
-                          }`}
-                          style={{ width: `${responseConfidence}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-neutral-200">
-                <h4 className="text-sm font-medium text-neutral-900 mb-3">Actions</h4>
-                
-                <div className="space-y-2">
-                  {!isTicketResolved && (
-                    <>
-                      <button
-                        onClick={() => setShowNoteForm(true)}
-                        className="w-full flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      >
-                        Add Note
-                      </button>
-                      
-                      <button
-                        className="w-full flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      >
-                        Forward
-                      </button>
-                      
-                      <button
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-success-600 hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-success-500"
-                        onClick={handleResolve}
-                      >
-                        Resolve Ticket
-                      </button>
-                    </>
-                  )}
-                  
-                  {isTicketResolved && (
-                    <div className="text-center py-4">
-                      <CheckCircle className="h-8 w-8 text-success-500 mx-auto mb-2" />
-                      <p className="text-sm text-neutral-600">Ticket Resolved</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

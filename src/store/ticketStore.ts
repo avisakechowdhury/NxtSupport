@@ -177,12 +177,10 @@ export const useTicketStore = create<TicketsState & {
         { status: 'escalated', reason },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
       set(state => {
         const updatedTickets = state.tickets.map(ticket => 
           ticket._id === id ? response.data.ticket : ticket
         );
-        
         return {
           tickets: updatedTickets,
           currentTicket: response.data.ticket,
@@ -190,6 +188,8 @@ export const useTicketStore = create<TicketsState & {
           isLoading: false
         };
       });
+      // Refetch activities for real-time update
+      await get().fetchTicketActivities(id);
     } catch (error) {
       set({ error: 'Failed to escalate ticket', isLoading: false });
     }
@@ -204,12 +204,10 @@ export const useTicketStore = create<TicketsState & {
         { status: 'resolved' },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
       set(state => {
         const updatedTickets = state.tickets.map(ticket => 
           ticket._id === id ? response.data.ticket : ticket
         );
-        
         return {
           tickets: updatedTickets,
           currentTicket: response.data.ticket,
@@ -217,8 +215,37 @@ export const useTicketStore = create<TicketsState & {
           isLoading: false
         };
       });
+      // Refetch activities for real-time update
+      await get().fetchTicketActivities(id);
     } catch (error) {
       set({ error: 'Failed to resolve ticket', isLoading: false });
+    }
+  },
+
+  addComment: async (id: string, text: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/tickets/${id}/comments`,
+        { text },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      set(state => {
+        const updatedTicket = state.currentTicket ? {
+          ...state.currentTicket,
+          comments: [...(state.currentTicket.comments || []), response.data.comment]
+        } : null;
+
+        return {
+          currentTicket: updatedTicket,
+          activities: [...state.activities, response.data.activity],
+          isLoading: false
+        };
+      });
+    } catch (error) {
+      set({ error: 'Failed to add comment', isLoading: false });
     }
   },
 

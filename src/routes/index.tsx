@@ -18,9 +18,14 @@ import TicketsEscalated from '../pages/TicketsEscalated';
 import TicketView from '../pages/TicketView';
 import ManualTicket from '../pages/ManualTicket';
 import EmailSetup from '../pages/EmailSetup';
+// import ComplaintCategories from '../pages/ComplaintCategories';
+import CustomerPortal from '../pages/CustomerPortal';
 import Analytics from '../pages/Analytics';
+import AdvancedAnalyticsDashboard from '../pages/AdvancedAnalyticsDashboard';
 import Settings from '../pages/Settings';
+import Profile from '../pages/Profile';
 import Team from '../pages/Team';
+import EmailDetail from '../pages/EmailDetail';
 
 // Personal Pages
 import PersonalDashboard from '../pages/personal/PersonalDashboard';
@@ -87,6 +92,7 @@ const AppRoutes = () => {
         <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to={user?.accountType === 'personal' ? "/personal/dashboard" : "/dashboard"} replace />} />
         <Route path="/register/business" element={!isAuthenticated ? <Register /> : <Navigate to="/dashboard" replace />} />
         <Route path="/register/personal" element={!isAuthenticated ? <PersonalRegister /> : <Navigate to="/personal/dashboard" replace />} />
+        <Route path="/ticket/:token" element={<CustomerPortal />} />
         
         {/* Logout Route */}
         <Route path="/logout" element={<LogoutPage />} />
@@ -101,8 +107,12 @@ const AppRoutes = () => {
             <Route path="/tickets/manual" element={<ManualTicket />} />
             <Route path="/tickets/:id" element={<TicketView />} />
             <Route path="/email-setup" element={<EmailSetup />} />
+            <Route path="/email/:id" element={<EmailDetail />} />
+            {/* <Route path="/complaint-categories" element={<ComplaintCategories />} /> */}
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/advanced-analytics" element={<AdvancedAnalyticsDashboard />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/team" element={<Team />} />
           </Route>
         </Route>
@@ -114,6 +124,7 @@ const AppRoutes = () => {
             <Route path="/personal/inbox" element={<PersonalInbox />} />
             <Route path="/personal/analytics" element={<PersonalAnalytics />} />
             <Route path="/personal/settings" element={<PersonalSettings />} />
+            <Route path="/personal/profile" element={<Profile />} />
           </Route>
         </Route>
         

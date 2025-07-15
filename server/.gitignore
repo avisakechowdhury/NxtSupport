@@ -36,3 +36,25 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Complaint Category Feature (Frontend)
+src/components/ComplaintCategories/ComplaintCategoryManager.tsx
+src/components/ComplaintCategories/EmailCategorizationTest.tsx
+src/components/ComplaintCategories/ComplaintCategoriesStats.tsx
+src/components/ComplaintCategories/ComplaintCategoriesBreadcrumb.tsx
+src/components/ComplaintCategories/CategorizedEmails.tsx
+src/components/Icons/ComplaintCategoriesIcon.tsx
+src/pages/ComplaintCategories.tsx
+src/services/complaintCategoryService.ts
+
+# Complaint Category Feature (Backend)
+server/models/ComplaintCategory.js
+server/routes/complaintCategoryRoutes.js
+server/services/aiTrainingService.js
+
+# Complaint Category AI Training Data
+data/Product/
+data/Technical/
+data/Shipping/
+data/Customer_Service/
+data/Billing/

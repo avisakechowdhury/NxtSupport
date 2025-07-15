@@ -488,10 +488,10 @@ import authenticateToken from '../middleware/authenticateToken.js';
 import axios from 'axios';
 
 const router = express.Router();
-
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI_PERSONAL;
+  
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 560866680909-d9gqc5i9g3o20vj503mmamtd3k2ulj31.apps.googleusercontent.com;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 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;
+const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -664,7 +664,7 @@ router.get('/emails', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Google account not connected.' });
     }
 
-    const client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI);
+    const client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
     client.setCredentials({
       access_token: user.googleAuth.accessToken,
       refresh_token: user.googleAuth.refreshToken,

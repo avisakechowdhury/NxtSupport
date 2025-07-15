@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, AlertCircle, RefreshCw, Inbox, Loader2, Power } from 'lucide-react';
+import { Mail, AlertCircle, RefreshCw, Inbox, Loader2, Power, User as UserIcon } from 'lucide-react';
 import axios, { AxiosError } from 'axios';
+import { useBusinessEmailStore } from '../../store/businessEmailStore';
+import { useNavigate } from 'react-router-dom';
 
 // Assuming useAuthStore provides company info and updates it
 // For this example, we'll mock a simplified version or assume it's globally available
@@ -124,6 +126,8 @@ interface Email {
 
 interface FetchEmailsResponse {
   emails: Email[];
+  nextPageToken?: string | null;
+  page?: number;
 }
 
 interface ApiError {
@@ -131,17 +135,36 @@ interface ApiError {
   details?: string;
 }
 
+// Utility to generate a color from a string (e.g., email)
+function stringToColor(str: string) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const color = `hsl(${hash % 360}, 70%, 60%)`;
+  return color;
+}
+
 const EmailConnector: React.FC = () => {
   const { company, token, setCompanyAuthStatus, fetchCompanyData } = useAuthStore();
+
+  // Use business email store for all state
+  const {
+    emails,
+    isLoading,
+    error,
+    page,
+    nextPageToken,
+    pageSize,
+    fetchEmails,
+    clearEmails
+  } = useBusinessEmailStore();
   
   const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
   const [connectError, setConnectError] = useState<string>('');
-  
-  const [emails, setEmails] = useState<Email[]>([]);
-  const [isFetchingEmails, setIsFetchingEmails] = useState<boolean>(false);
-  const [fetchEmailsError, setFetchEmailsError] = useState<string>('');
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
+  const navigate = useNavigate();
 
   const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 
@@ -162,43 +185,27 @@ const EmailConnector: React.FC = () => {
     }
   }, [company]);
 
-  // Only fetch emails once when component mounts and company is connected
+  // On mount: if emails already exist, trigger a refresh (show spinner on refresh button, keep emails visible)
   useEffect(() => {
-    if (company?.googleAuthConnected && token && emails.length === 0) {
-      // console.log("EmailConnector Effect: Google is connected, fetching emails once.");
-      fetchGoogleEmails(true);
+    if (company?.googleAuthConnected && token) {
+      fetchEmails(false);
     }
   }, [company?.googleAuthConnected, token]);
 
-  const fetchGoogleEmails = useCallback(async (isTriggeredManuallyOrFirstLoad = false) => {
-    if (!company || !company.googleAuthConnected || !token) {
-      setFetchEmailsError('Google account not connected or user not authenticated.');
-      console.warn("fetchGoogleEmails: Pre-conditions not met.", { companyGoogleAuth: company?.googleAuthConnected, tokenExists: !!token });
-      return;
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (nextPageToken) {
+      fetchEmails(false, page + 1, nextPageToken);
     }
-    if (isTriggeredManuallyOrFirstLoad) setIsFetchingEmails(true);
-    setFetchEmailsError('');
-    // console.log("fetchGoogleEmails: Attempting to fetch emails.");
-
-    try {
-      const response = await axios.get<FetchEmailsResponse>(`${API_BASE_URL}/auth/google/inbox`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setEmails(response.data.emails || []);
-      // console.log("fetchGoogleEmails: Successfully fetched emails.", response.data.emails);
-    } catch (err) {
-      const error = err as AxiosError<ApiError>;
-      console.error('fetchGoogleEmails: Failed to fetch Google emails:', error.response?.data || error.message);
-      const errorMsg = error.response?.data?.error || 'Failed to fetch emails.';
-      setFetchEmailsError(errorMsg + (error.response?.data?.details ? ` Details: ${error.response?.data?.details}` : ''));
-      if (error.response?.status === 403) {
-        console.warn("fetchGoogleEmails: Received 403, updating auth status to disconnected.");
-        setCompanyAuthStatus({ googleAuthConnected: false, googleEmail: null, emailConnectedOverall: !!company?.emailConnected }); // Keep overall status if other methods exist
-      }
-    } finally {
-      if (isTriggeredManuallyOrFirstLoad) setIsFetchingEmails(false);
+  };
+  const handlePrevPage = () => {
+    if (page > 1) {
+      fetchEmails(false, page - 1, undefined);
     }
-  }, [company, token, API_BASE_URL, setCompanyAuthStatus]);
+  };
+  const handleRefresh = () => {
+    fetchEmails(false);
+  };
 
 
 const handleGoogleSignIn = async () => {
@@ -245,7 +252,6 @@ const handleGoogleSignIn = async () => {
     }
     setIsConnectingGoogle(true);
     setConnectError('');
-    setFetchEmailsError('');
     try {
         // console.log("handleGoogleDisconnect: Initiating disconnect.");
         await axios.post(`${API_BASE_URL}/auth/google/disconnect`, {}, {
@@ -253,7 +259,7 @@ const handleGoogleSignIn = async () => {
         });
         // console.log("handleGoogleDisconnect: Successfully disconnected on backend.");
         setCompanyAuthStatus({ googleAuthConnected: false, googleEmail: null, emailConnectedOverall: false }); 
-        setEmails([]);
+        clearEmails();
         // await fetchCompanyData(); // Re-fetch to confirm, or rely on setCompanyAuthStatus
     } catch (err) {
         const error = err as AxiosError<ApiError>;
@@ -277,6 +283,21 @@ const handleGoogleSignIn = async () => {
         dangerouslySetInnerHTML={{ __html: body }}
       />
     );
+  };
+
+  const markAsUnread = async (emailId: string) => {
+    try {
+      await axios.post(`${API_BASE_URL}/auth/google/mark-unread`, { messageId: emailId }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Update local store (set isUnread to true)
+      useBusinessEmailStore.setState(state => ({
+        emails: state.emails.map(e => e.id === emailId ? { ...e, isUnread: true } : e)
+      }));
+      setShowEmailModal(false);
+    } catch (err) {
+      alert('Failed to mark as unread.');
+    }
   };
 
   if (!company) {
@@ -305,12 +326,12 @@ const handleGoogleSignIn = async () => {
               </div>
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => fetchGoogleEmails(true)}
-                  disabled={isFetchingEmails || isConnectingGoogle}
+                  onClick={handleRefresh}
+                  disabled={isLoading || isConnectingGoogle}
                   className="p-2 rounded-md hover:bg-neutral-100 text-neutral-600 disabled:opacity-50 disabled:cursor-wait"
                   aria-label="Refresh emails"
                 >
-                  {isFetchingEmails ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+                  {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
                 </button>
                 <button
                   type="button"
@@ -335,96 +356,61 @@ const handleGoogleSignIn = async () => {
                 <AlertCircle className="h-5 w-5 text-red-500 inline mr-2" /> {connectError}
               </div>
             )}
-            {fetchEmailsError && (
+            {error && (
               <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md relative">
-                <AlertCircle className="h-5 w-5 text-red-400 inline mr-2" /> {fetchEmailsError}
+                <AlertCircle className="h-5 w-5 text-red-400 inline mr-2" /> {error}
               </div>
             )}
 
-            {isFetchingEmails && emails.length === 0 && (
+            {isLoading && emails.length === 0 ? (
               <div className="flex flex-col justify-center items-center py-10 text-center">
                 <Loader2 className="h-8 w-8 text-primary-600 animate-spin mb-2" />
                 <p className="text-neutral-600">Loading emails...</p>
               </div>
-            )}
-
-            {!isFetchingEmails && emails.length === 0 && !fetchEmailsError && !connectError && (
+            ) : emails.length === 0 && !error && !connectError ? (
               <div className="text-center py-10">
                 <Inbox className="h-12 w-12 text-neutral-400 mx-auto mb-2" />
                 <p className="text-neutral-500">No recent emails found in your Google inbox.</p>
               </div>
-            )}
-
-            {emails.length > 0 && (
-              <ul className="space-y-3 max-h-[calc(100vh-22rem)] overflow-y-auto pr-2 custom-scrollbar">
+            ) : emails.length > 0 && (
+              <>
+                <ul className="space-y-2 max-h-[calc(100vh-22rem)] overflow-y-auto pr-2 custom-scrollbar">
                 {emails.map((email) => (
                   <li 
                     key={email.id} 
-                    className={`p-4 bg-neutral-50 rounded-md shadow-sm hover:shadow-md transition-shadow border-l-4 cursor-pointer ${email.type === 'Complaint' ? 'border-blue-500' : 'border-transparent'}`}
-                    onClick={() => handleEmailClick(email)}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <h5 className="font-semibold text-neutral-800 truncate pr-2" title={email.subject}>{email.subject}</h5>
-                      <span className="text-xs text-neutral-500 whitespace-nowrap ml-2">
-                        {new Date(email.dateTime).toLocaleString()} {email.isUnread && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Unread</span>}
-                      </span>
-                    </div>
-                    <p className="text-sm text-neutral-600 truncate" title={email.from}>From: {email.from}</p>
-                    <p className="text-sm text-neutral-500 mt-1 text-ellipsis overflow-hidden h-10">{email.snippet}</p>
-                    {/* Display ticket info if it's a complaint */}
-                    {email.type === 'Complaint' && email.ticketNumber && (
-                      <div className="mt-2 text-xs font-medium flex flex-wrap gap-2">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                             Type: Complaint
-                          </span>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
-                             Ticket: {email.ticketNumber}
-                          </span>
-                          {email.acknowledged && (
-                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800">
-                               Acknowledged: Yes
-                             </span>
-                          )}
+                      className={`flex items-center gap-4 p-4 bg-white rounded-lg shadow hover:shadow-md border border-neutral-200 cursor-pointer transition-all ${email.isUnread ? 'border-blue-500' : 'border-transparent'}`}
+                      onClick={() => navigate(`/email/${email.id}`)}
+                    >
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                        <div
+                          className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-lg select-none"
+                          style={{ background: stringToColor(email.from || email.subject || 'N') }}
+                        >
+                          {((email.from || email.subject || 'N').trim().charAt(0).toUpperCase())}
+                        </div>
                       </div>
-                    )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className={`font-semibold truncate ${email.isUnread ? 'text-blue-700' : 'text-neutral-900'}`}>{email.subject}</span>
+                          <span className="text-xs text-neutral-500 ml-2 whitespace-nowrap">{new Date(email.dateTime).toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-neutral-600 truncate max-w-xs">{email.snippet}</span>
+                          {email.isUnread && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Unread</span>}
+                    </div>
+                      </div>
                   </li>
                 ))}
               </ul>
+                <div className="flex justify-between items-center mt-4 text-xs">
+                  <button onClick={handlePrevPage} disabled={page <= 1} className="px-2 py-1 rounded bg-neutral-200 text-neutral-700 disabled:opacity-50">Prev</button>
+                  <span>Page {page}</span>
+                  <button onClick={handleNextPage} disabled className="px-2 py-1 rounded bg-neutral-200 text-neutral-700 opacity-50 cursor-not-allowed">Next</button>
+                </div>
+              </>
             )}
           </div>
         </div>
-
-        {/* Email Modal */}
-        {showEmailModal && selectedEmail && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-              <div className="p-6 border-b border-neutral-200">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-neutral-900 mb-2">{selectedEmail.subject}</h3>
-                    <div className="text-sm text-neutral-600">
-                      <p><strong>From:</strong> {selectedEmail.from}</p>
-                      <p><strong>Date:</strong> {new Date(selectedEmail.dateTime).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowEmailModal(false)}
-                    className="ml-4 text-neutral-400 hover:text-neutral-600"
-                  >
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="p-6 overflow-y-auto max-h-[60vh]">
-                {selectedEmail.body ? renderEmailBody(selectedEmail.body) : (
-                  <p className="text-neutral-600">{selectedEmail.snippet}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </>
     );
   }

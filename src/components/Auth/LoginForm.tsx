@@ -1,7 +1,21 @@
 import React, { useState } from 'react';
-import { Mail, Lock } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate, Link } from 'react-router-dom';
+import { Label } from '../ui/label';
+import { Input } from '../ui/input';
+import { cn } from '../../lib/utils';
+import { WavyBackground } from '../ui/wavy-background';
+
+const BottomGradient = () => (
+  <>
+    <span className="absolute inset-x-0 -bottom-px block h-px w-full bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-0 transition duration-500 group-hover/btn:opacity-100" />
+    <span className="absolute inset-x-10 -bottom-px mx-auto block h-px w-1/2 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-0 blur-sm transition duration-500 group-hover/btn:opacity-100" />
+  </>
+);
+
+const LabelInputContainer = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn('flex w-full flex-col space-y-2', className)}>{children}</div>
+);
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -20,97 +34,61 @@ const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-neutral-50">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="h-12 w-12 rounded-full bg-primary-100 flex items-center justify-center">
-            <Mail className="h-6 w-6 text-primary-600" />
-          </div>
-        </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-neutral-900">
-          NxtMail - AI agent for email
-        </h2>
-        <p className="mt-2 text-center text-sm text-neutral-600">
-          Sign in to your account
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded relative" role="alert">
-                <span className="block sm:inline">{error}</span>
-              </div>
-            )}
-            
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-neutral-700">
-                Email address
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-neutral-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="block w-full pl-10 sm:text-sm border-neutral-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="you@example.com"
-                />
-              </div>
+    <WavyBackground>
+      <div className="min-h-screen flex items-center justify-center bg-transparent px-2 sm:px-4 overflow-x-hidden">
+        <div className="shadow-input mx-auto w-full max-w-xs sm:max-w-md rounded-none bg-white p-2 sm:p-4 md:rounded-2xl md:p-8 dark:bg-black max-w-full">
+          <h2 className="text-xl font-bold text-neutral-800 dark:text-neutral-200 text-center">Sign in to your account</h2>
+          <p className="mt-2 max-w-sm text-sm text-neutral-600 dark:text-neutral-300 text-center">
+            Enter your email and password to access your dashboard
+          </p>
+          {error && (
+            <div className="mb-6 mt-4 p-3 bg-red-100 border border-red-200 rounded text-red-700 text-sm text-center">
+              {error}
             </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-neutral-700">
-                Password
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-neutral-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="block w-full pl-10 sm:text-sm border-neutral-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-300 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Signing in...' : 'Sign in'}
-              </button>
-            </div>
+          )}
+          <form className="my-8" onSubmit={handleSubmit}>
+            <LabelInputContainer className="mb-4">
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                placeholder="you@example.com"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </LabelInputContainer>
+            <LabelInputContainer className="mb-6">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                placeholder="••••••••"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </LabelInputContainer>
+            <button
+              className="group/btn relative block h-10 w-full rounded-md bg-gradient-to-br from-black to-neutral-600 font-medium text-white shadow-[0px_1px_0px_0px_#ffffff40_inset,0px_-1px_0px_0px_#ffffff40_inset] dark:bg-zinc-800 dark:from-zinc-900 dark:to-zinc-900 dark:shadow-[0px_1px_0px_0px_#27272a_inset,0px_-1px_0px_0px_#27272a_inset] text-base sm:text-sm"
+              type="submit"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Signing in...' : 'Sign in →'}
+              <BottomGradient />
+            </button>
           </form>
-
-          <div className="mt-6">
-            <div className="text-center">
-              <p className="text-sm text-neutral-600">
-                Don't have an account?{' '}
-                <Link to="/register" className="font-medium text-primary-600 hover:text-primary-500">
-                  Sign up
-                </Link>
-              </p>
-            </div>
+          <div className="mt-8 text-center">
+            <p className="text-sm text-neutral-600 dark:text-neutral-300">
+              Don't have an account?{' '}
+              <Link to="/register" className="text-primary-600 hover:underline font-medium">Sign up</Link>
+            </p>
           </div>
         </div>
       </div>
-    </div>
+    </WavyBackground>
   );
 };
 

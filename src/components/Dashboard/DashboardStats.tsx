@@ -10,57 +10,60 @@ import {
   AlertCircle,
   Bell
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const StatCard = ({ 
   title, 
   value, 
   change, 
   icon: Icon,
-  isPositive
+  isPositive,
+  to
 }: {
   title: string;
   value: number;
   change: number;
   icon: React.ElementType;
   isPositive?: boolean;
+  to: string;
 }) => {
   const changeIsPositive = isPositive !== undefined ? isPositive : change >= 0;
-  
   return (
-    <div className="bg-white overflow-hidden shadow-card rounded-lg">
-      <div className="p-5">
-        <div className="flex items-center">
-          <div className="flex-shrink-0">
-            <Icon className="h-6 w-6 text-neutral-500" />
-          </div>
-          <div className="ml-5 w-0 flex-1">
-            <dt className="text-sm font-medium text-neutral-500 truncate">
-              {title}
-            </dt>
-            <dd className="flex items-baseline">
-              <div className="text-2xl font-semibold text-neutral-900">
-                {value}
-              </div>
-              
-              {change !== 0 && (
-                <div className={`ml-2 flex items-center text-sm font-medium ${
-                  changeIsPositive ? 'text-success-600' : 'text-error-600'
-                }`}>
-                  {changeIsPositive ? (
-                    <ArrowUpCircle className="h-4 w-4 flex-shrink-0 self-center" />
-                  ) : (
-                    <ArrowDownCircle className="h-4 w-4 flex-shrink-0 self-center" />
-                  )}
-                  <span className="ml-1">
-                    {Math.abs(change)}%
-                  </span>
+    <Link to={to} className="block group focus:outline-none">
+      <div className="bg-white overflow-hidden shadow-card rounded-lg transition ring-2 ring-transparent group-hover:ring-primary-200 group-focus:ring-primary-400 cursor-pointer">
+        <div className="p-5">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <Icon className="h-6 w-6 text-neutral-500" />
+            </div>
+            <div className="ml-5 w-0 flex-1">
+              <dt className="text-sm font-medium text-neutral-500 truncate">
+                {title}
+              </dt>
+              <dd className="flex items-baseline">
+                <div className="text-2xl font-semibold text-neutral-900">
+                  {value}
                 </div>
-              )}
-            </dd>
+                {change !== 0 && (
+                  <div className={`ml-2 flex items-center text-sm font-medium ${
+                    changeIsPositive ? 'text-success-600' : 'text-error-600'
+                  }`}>
+                    {changeIsPositive ? (
+                      <ArrowUpCircle className="h-4 w-4 flex-shrink-0 self-center" />
+                    ) : (
+                      <ArrowDownCircle className="h-4 w-4 flex-shrink-0 self-center" />
+                    )}
+                    <span className="ml-1">
+                      {Math.abs(change)}%
+                    </span>
+                  </div>
+                )}
+              </dd>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 
@@ -174,26 +177,51 @@ const DashboardStats = () => {
     return () => clearInterval(interval);
   }, [fetchTickets]);
 
-  // Calculate real-time statistics
+  // Helper to get ticket count for a period
+  const getPeriodTicketCount = (tickets: any[], start: Date, end: Date, filterFn?: (t: any) => boolean) =>
+    tickets.filter(t => {
+      const created = new Date(t.createdAt);
+      return created >= start && created < end && (!filterFn || filterFn(t));
+    }).length;
+
+  const now = new Date();
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Calculate real-time statistics for this month
   const stats = {
-    totalTickets: tickets.length,
-    newTickets: tickets.filter(t => t.status === 'new' || t.status === 'acknowledged').length,
-    respondedTickets: tickets.filter(t => t.status === 'responded').length,
-    escalatedTickets: tickets.filter(t => t.status === 'escalated').length,
-    resolvedTickets: tickets.filter(t => t.status === 'resolved').length,
+    totalTickets: getPeriodTicketCount(tickets, startOfThisMonth, now),
+    newTickets: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.status === 'new' || t.status === 'acknowledged'),
+    respondedTickets: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.status === 'responded'),
+    escalatedTickets: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.status === 'escalated'),
+    resolvedTickets: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.status === 'resolved'),
     ticketsByPriority: {
-      low: tickets.filter(t => t.priority === 'low').length,
-      medium: tickets.filter(t => t.priority === 'medium').length,
-      high: tickets.filter(t => t.priority === 'high').length,
-      urgent: tickets.filter(t => t.priority === 'urgent').length
+      low: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.priority === 'low'),
+      medium: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.priority === 'medium'),
+      high: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.priority === 'high'),
+      urgent: getPeriodTicketCount(tickets, startOfThisMonth, now, t => t.priority === 'urgent')
     }
   };
 
-  // Calculate growth rates (simplified - in real app, compare with previous period)
-  const calculateGrowthRate = (current: number) => {
-    // Simulate growth rate calculation
-    return Math.floor(Math.random() * 20) - 10; // Random between -10 and 10
+  // Calculate previous period stats
+  const prevStats = {
+    totalTickets: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth),
+    newTickets: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.status === 'new' || t.status === 'acknowledged'),
+    respondedTickets: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.status === 'responded'),
+    escalatedTickets: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.status === 'escalated'),
+    resolvedTickets: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.status === 'resolved'),
+    ticketsByPriority: {
+      low: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.priority === 'low'),
+      medium: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.priority === 'medium'),
+      high: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.priority === 'high'),
+      urgent: getPeriodTicketCount(tickets, startOfLastMonth, endOfLastMonth, t => t.priority === 'urgent')
+    }
   };
+
+  // Calculate real growth rates
+  const calcGrowth = (current: number, previous: number) =>
+    previous === 0 ? (current > 0 ? 100 : 0) : Math.round(((current - previous) / previous) * 100);
 
   return (
     <div>
@@ -203,27 +231,31 @@ const DashboardStats = () => {
         <StatCard 
           title="Total Tickets" 
           value={stats.totalTickets} 
-          change={calculateGrowthRate(stats.totalTickets)} 
+          change={calcGrowth(stats.totalTickets, prevStats.totalTickets)} 
           icon={TicketCheck} 
+          to="/tickets/all"
         />
         <StatCard 
           title="New Tickets" 
           value={stats.newTickets} 
-          change={calculateGrowthRate(stats.newTickets)} 
+          change={calcGrowth(stats.newTickets, prevStats.newTickets)} 
           icon={Bell} 
+          to="/tickets/new"
         />
         <StatCard 
           title="Escalated" 
           value={stats.escalatedTickets} 
-          change={calculateGrowthRate(stats.escalatedTickets)} 
+          change={calcGrowth(stats.escalatedTickets, prevStats.escalatedTickets)} 
           icon={AlertTriangle}
           isPositive={false} // Escalated tickets going up is bad
+          to="/tickets/escalated"
         />
         <StatCard 
           title="Resolved" 
           value={stats.resolvedTickets} 
-          change={calculateGrowthRate(stats.resolvedTickets)} 
+          change={calcGrowth(stats.resolvedTickets, prevStats.resolvedTickets)} 
           icon={CheckCircle} 
+          to="/tickets/all"
         />
       </div>
       

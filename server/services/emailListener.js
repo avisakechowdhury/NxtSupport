@@ -3,6 +3,9 @@ import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
 import Ticket from '../models/Ticket.js'; // Assuming this is the correct path
 import Company from '../models/Company.js'; // Assuming this is the correct path
+import ProcessedEmail from '../models/ProcessedEmail.js'; // Add this import
+import NotificationService from './notificationService.js';
+// import aiTrainingService from './aiTrainingService.js';
 // It's good practice to import your models if you need to interact with them directly,
 // but often these are passed in from the route handler if EmailListener is a generic service.
 
@@ -25,6 +28,19 @@ const guessEmailServerHost = (email, servicePrefix) => {
   // Generic guess for custom domains
   return `${servicePrefix}.${domain}`;
 };
+
+// Utility function to extract ticket number from subject (same as in googleAuthRoutes)
+function extractTicketNumber(subject) {
+    const ticketMatch = subject.match(/[IT]NC\d{6}/);
+    return ticketMatch ? ticketMatch[0] : null;
+}
+
+// Utility function to get next priority level (same as in googleAuthRoutes)
+function getNextPriority(currentPriority) {
+    const priorities = ['low', 'medium', 'high', 'urgent'];
+    const currentIndex = priorities.indexOf(currentPriority);
+    return currentIndex < priorities.length - 1 ? priorities[currentIndex + 1] : currentPriority;
+}
 
 class EmailListener {
   constructor(config) {
@@ -93,7 +109,7 @@ class EmailListener {
         throw new Error(`Email server host not found: ${imapHost}. Please check the domain name.`);
       }
       if (error.message && error.message.toLowerCase().includes('authentication failed')) {
-        throw new Error('Authentication failed. Please check your email and password.');
+        throw new Error('Authentication failed: Please verify your email address and password. If you are using Gmail or Outlook, ensure that IMAP access is enabled and app-specific passwords are used if 2FA is on.');
       }
       if (error.message && error.message.toLowerCase().includes('unauthorized')) {
         throw new Error('Authorization failed. Ensure your account allows IMAP access and the credentials are correct.');
@@ -179,6 +195,18 @@ class EmailListener {
       console.log(`Found ${messages.length} new messages for ${this.config.email}.`);
 
       for (const message of messages) {
+        const emailUid = message.attributes.uid.toString();
+        
+        // Check if this email has already been processed
+        const alreadyProcessed = await ProcessedEmail.findOne({
+          companyId: companyId,
+          emailUid: emailUid
+        });
+        
+        if (alreadyProcessed) {
+          console.log(`Email ${emailUid} already processed, skipping...`);
+          continue;
+        }
         // The body for 'TEXT' part is usually in message.parts.find(part => part.which === 'TEXT').body
         const textPart = message.parts.find(part => part.which === 'TEXT');
         const rawEmailBody = textPart ? textPart.body : '';
@@ -206,6 +234,7 @@ class EmailListener {
           companyId: companyId, // Ensure companyId is passed
           rawEmail: rawEmailBody, // Store raw email if needed for later processing or display
           messageId: parsed.messageId, // Useful for tracking
+          emailUid: emailUid, // Add email UID for tracking
           receivedDate: parsed.date || new Date(),
         });
 
@@ -235,35 +264,114 @@ class EmailListener {
   }
 
   async createTicket(data) {
-    // Ensure Ticket model is available
-    if (!Ticket) {
-      console.error("Ticket model is not available in EmailListener.");
-      throw new Error("Ticket model configuration error.");
-    }
     try {
-      const ticketCount = await Ticket.countDocuments({ companyId: data.companyId });
-      const ticketNumber = `TKT-${(ticketCount + 1).toString().padStart(4, '0')}`;
+      // First check if this is a reply to an existing ticket
+      const ticketNumber = extractTicketNumber(data.subject);
+      let ticket = null;
+      let action = 'created';
+      
+      if (ticketNumber) {
+        // This is a reply to an existing ticket
+        const existingTicket = await Ticket.findOne({ ticketNumber });
+        if (existingTicket) {
+          console.log(`Found existing ticket ${ticketNumber}, updating instead of creating new ticket`);
+          
+          // Update priority (assuming reply with complaint)
+          const newPriority = getNextPriority(existingTicket.priority);
+          existingTicket.priority = newPriority;
+          existingTicket.escalationCount += 1;
+          existingTicket.lastReplyAt = new Date();
+          
+          // Add the reply to the ticket
+          await existingTicket.save();
+          
+          ticket = existingTicket;
+          action = 'updated';
+        }
+      }
 
-      const ticket = new Ticket({
-        subject: data.subject,
-        body: data.body,
-        senderEmail: data.senderEmail,
-        senderName: data.senderName,
+      // If we get here, this is a new ticket
+      if (!ticket) {
+        // Generate unique ticket number with retry logic
+        let newTicketNumber;
+        let retryCount = 0;
+        const maxRetries = 5;
+
+        do {
+          const ticketCount = await Ticket.countDocuments({ companyId: data.companyId });
+          newTicketNumber = `INC${(ticketCount + 1 + retryCount).toString().padStart(6, '0')}`;
+          
+          // Check if this ticket number already exists
+          const existingTicket = await Ticket.findOne({ ticketNumber: newTicketNumber });
+          if (!existingTicket) {
+            // Categorize the email using AI
+            let categorization = null;
+            try {
+              // categorization = await aiTrainingService.categorizeEmail(emailContent, data.companyId);
+              // console.log(`Email categorized as: ${categorization.category} (confidence: ${categorization.confidence}%)`);
+              console.log('Email categorization disabled');
+            } catch (error) {
+              console.error('Error categorizing email:', error);
+              categorization = {
+                category: 'default',
+                categoryId: null,
+                confidence: 0,
+                reasoning: 'Categorization failed'
+              };
+            }
+
+            // Create ticket with categorization data
+            const ticketData = {
+              ticketNumber,
+              companyId: data.companyId,
+              subject: data.subject,
+              body: data.body,
+              senderEmail: data.senderEmail,
+              senderName: data.senderName,
+              status: 'new',
+              priority: 'low',
+              // complaintCategory: categorization.categoryId,
+              // complaintCategoryName: categorization.category,
+              // complaintCategoryConfidence: categorization.confidence
+            };
+
+            ticket = new Ticket(ticketData);
+
+            await ticket.save();
+            break; // Successfully created ticket, exit loop
+          }
+          
+          retryCount++;
+        } while (retryCount < maxRetries);
+
+        if (!ticket) {
+          console.error('Failed to create ticket after maximum retries');
+          throw new Error('Failed to create ticket due to duplicate ticket numbers');
+        }
+
+        // Create notification for new ticket (system created)
+        const systemUser = {
+          _id: 'system',
+          name: 'System',
+          email: 'system@nxtsupport.com'
+        };
+        await NotificationService.createTicketCreatedNotification(ticket, systemUser);
+      }
+
+      // Record this email as processed
+      await ProcessedEmail.create({
         companyId: data.companyId,
-        ticketNumber,
-        status: 'New', // Standardized status
-        priority: 'Medium', // Default priority
-        source: 'Email',
-        // aiConfidence: 0.85, // If you have this field
-        createdAt: data.receivedDate || new Date(), // Use email received date if available
+        emailUid: data.emailUid,
         messageId: data.messageId,
+        subject: data.subject,
+        senderEmail: data.senderEmail,
+        ticketId: ticket._id,
+        action: action
       });
 
-      await ticket.save();
-      console.log(`Ticket ${ticketNumber} created for ${data.senderEmail}`);
       return ticket;
     } catch (error) {
-      console.error('Error creating ticket:', error.message, error.stack);
+      console.error('Error creating/updating ticket:', error);
       throw error;
     }
   }
@@ -281,22 +389,60 @@ class EmailListener {
         return;
       }
 
-      const mailOptions = {
-        from: `"${company.name} Support" <${this.config.email}>`, // Send from the connected support email
-        to: ticket.senderEmail,
-        subject: `[${ticket.ticketNumber}] We've Received Your Support Request: ${ticket.subject}`,
-        text: `Dear ${ticket.senderName || 'Customer'},
+      const portalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/ticket/${ticket.publicToken}`;
+      
+      // Check if company has custom email template
+      const useCustom = company.emailTemplate?.useCustomTemplate && 
+                       company.emailTemplate?.subject && 
+                       company.emailTemplate?.body;
+      
+      // Check if customer portal is enabled and should include in emails
+      const includePortalLink = company.customerPortal?.enabled && company.customerPortal?.includeInEmails;
+      
+      const templateVars = {
+        customerName: ticket.senderName || 'Customer',
+        companyName: company.name,
+        subject: ticket.subject,
+        ticketNumber: ticket.ticketNumber,
+        portalUrl: includePortalLink ? portalUrl : ''
+      };
+
+      // Helper function to render email template
+      const renderEmailTemplate = (template, variables) => {
+        let rendered = template;
+        Object.keys(variables).forEach(key => {
+          const placeholder = `{{${key}}}`;
+          rendered = rendered.replace(new RegExp(placeholder, 'g'), variables[key]);
+        });
+        return rendered;
+      };
+
+      const emailSubject = useCustom 
+        ? renderEmailTemplate(company.emailTemplate.subject, templateVars)
+        : `[${ticket.ticketNumber}] We've Received Your Support Request: ${ticket.subject}`;
+
+      const emailContent = useCustom
+        ? renderEmailTemplate(company.emailTemplate.body, templateVars)
+        : `Dear ${ticket.senderName || 'Customer'},
 
 Thank you for contacting ${company.name} Support.
 
 This email confirms that we have received your message regarding: "${ticket.subject}".
-Your request has been assigned ticket number: ${ticket.ticketNumber}.
+Your request has been assigned ticket number: ${ticket.ticketNumber}.${includePortalLink ? `
+
+Track your ticket status: ${portalUrl}` : ''}
 
 Our team will review your request and get back to you as soon as possible. You can reply to this email to add more comments to your ticket.
 
 Best regards,
 The ${company.name} Support Team
-${this.config.email}`, // Include the support email address
+${this.config.email}`;
+
+      const mailOptions = {
+        from: `"${company.name} Support" <${this.config.email}>`, // Send from the connected support email
+        to: ticket.senderEmail,
+        subject: emailSubject,
+        text: emailContent,
         replyTo: this.config.email, // Ensure replies go to the support inbox
         inReplyTo: ticket.messageId, // Threading: original email's Message-ID
         references: ticket.messageId, // Threading

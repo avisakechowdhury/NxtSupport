@@ -10,6 +10,7 @@ export const useAuthStore = create<AuthState & {
   register: (company: Partial<Company>, admin: Partial<User>, password: string) => Promise<void>;
   registerPersonal: (userData: { name: string; email: string; password: string }) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
+  updateUserProfile: (userData: { name?: string; email?: string }) => Promise<void>;
   setCompanyAuthStatus: (status: { googleAuthConnected: boolean; googleEmail: string | null; emailConnectedOverall: boolean }) => void;
 }>((set) => ({
   user: null,
@@ -157,6 +158,28 @@ export const useAuthStore = create<AuthState & {
         isLoading: false,
         error: null
       });
+    }
+  },
+
+  updateUserProfile: async (userData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.patch(`${API_URL}/auth/profile`, userData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      set(state => ({
+        user: state.user ? { ...state.user, ...response.data.user } : null,
+        isLoading: false,
+        error: null
+      }));
+    } catch (error) {
+      set({ 
+        error: error.response?.data?.error || 'Failed to update profile', 
+        isLoading: false
+      });
+      throw error;
     }
   },
 

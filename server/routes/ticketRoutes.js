@@ -3,6 +3,7 @@ import authenticateToken from '../middleware/authenticateToken.js';
 import Ticket from '../models/Ticket.js';
 import TicketActivity from '../models/TicketActivity.js';
 import User from '../models/User.js';
+import NotificationService from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -92,12 +93,21 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
     // Get user info for activity
     const user = await User.findById(req.user.id);
 
+    let activityDetails = `Status changed to ${status}`;
+    if (status === 'escalated' && reason) {
+      activityDetails = `Ticket escalated by ${user?.name || 'System'}: ${reason}`;
+    } else if (reason) {
+      activityDetails += `: ${reason}`;
+    } else {
+      activityDetails += ` by ${user?.name || 'System'}`;
+    }
+
     const activity = new TicketActivity({
       ticketId: ticket._id,
-      activityType: 'statusChanged',
+      activityType: 'status_changed', // fixed enum value
       userId: req.user.id,
       userName: user?.name || 'System',
-      details: `Status changed to ${status}${reason ? `: ${reason}` : ''} by ${user?.name || 'System'}`
+      details: activityDetails
     });
     await activity.save();
 
@@ -111,6 +121,11 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
 router.patch('/:id/priority', authenticateToken, async (req, res) => {
   try {
     const { priority } = req.body;
+    const ticketBefore = await Ticket.findOne({ _id: req.params.id, companyId: req.user.companyId });
+    const oldPriority = ticketBefore?.priority;
+    console.log('[PRIORITY PATCH] Old:', oldPriority, 'New:', priority);
+    const priorityOrder = ['low', 'medium', 'high', 'urgent'];
+    console.log('[PRIORITY PATCH] Indexes:', priorityOrder.indexOf(priority), priorityOrder.indexOf(oldPriority));
     const ticket = await Ticket.findOneAndUpdate(
       { _id: req.params.id, companyId: req.user.companyId },
       { priority },
@@ -124,15 +139,23 @@ router.patch('/:id/priority', authenticateToken, async (req, res) => {
 
     const activity = new TicketActivity({
       ticketId: ticket._id,
-      activityType: 'statusChanged',
+      activityType: 'status_changed', // fixed enum value
       userId: req.user.id,
       userName: user?.name || 'System',
       details: `Priority changed to ${priority} by ${user?.name || 'System'}`
     });
     await activity.save();
 
+    if (oldPriority && priorityOrder.indexOf(priority) > priorityOrder.indexOf(oldPriority)) {
+      console.log('[PRIORITY PATCH] Triggering notification for priority increase');
+      await NotificationService.createTicketPriorityIncreasedNotification(ticket, oldPriority, priority, user);
+    } else {
+      console.log('[PRIORITY PATCH] No notification triggered for this change');
+    }
+
     res.json({ ticket, activity });
   } catch (error) {
+    console.error('[PRIORITY PATCH] Error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -168,6 +191,11 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
     });
     await activity.save();
 
+    // Create notification for ticket assignment
+    if (currentUser) {
+      await NotificationService.createTicketAssignedNotification(ticket, assignee, currentUser);
+    }
+
     res.json({ ticket, activity });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -199,6 +227,53 @@ router.post('/:id/notes', authenticateToken, async (req, res) => {
 
     res.json(activity);
   } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Add comment to ticket
+router.post('/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const ticket = await Ticket.findOne({ 
+      _id: req.params.id,
+      companyId: req.user.companyId 
+    });
+
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+    // Get user info
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Add comment to ticket
+    const comment = {
+      userId: user._id,
+      userName: user.name,
+      text,
+      createdAt: new Date()
+    };
+
+    ticket.comments.push(comment);
+    await ticket.save();
+
+    // Create activity for the comment
+    const activity = new TicketActivity({
+      ticketId: ticket._id,
+      activityType: 'comment',
+      userId: req.user.id,
+      userName: user.name,
+      details: `Comment added by ${user.name}`,
+      content: text
+    });
+    await activity.save();
+
+    // Create notification for new comment
+    await NotificationService.createCommentNotification(ticket, comment, user);
+
+    res.json({ comment, activity });
+  } catch (error) {
+    console.error('Error adding comment:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

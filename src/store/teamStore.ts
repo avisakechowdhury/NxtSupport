@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import axios from 'axios';
 
-interface TeamMember {
+export interface TeamMember {
   _id: string;
   name: string;
   email: string;

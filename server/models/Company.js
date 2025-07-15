@@ -41,6 +41,8 @@ Thank you for contacting {{companyName}} Support.
 This email confirms that we have received your message regarding: "{{subject}}".
 Your request has been assigned ticket number: {{ticketNumber}}.
 
+Track your ticket status: {{portalUrl}}
+
 Our team will review your request and get back to you as soon as possible. You can reply to this email to add more information to your ticket.
 
 Best regards,
@@ -49,6 +51,22 @@ The {{companyName}} Support Team`
     useCustomTemplate: {
       type: Boolean,
       default: false
+    },
+    selectedTemplate: {
+      type: String,
+      enum: ['formal', 'short', 'casual', 'empathetic', 'custom'],
+      default: 'formal'
+    }
+  },
+  // Customer portal settings
+  customerPortal: {
+    enabled: {
+      type: Boolean,
+      default: true
+    },
+    includeInEmails: {
+      type: Boolean,
+      default: true
     }
   },
   createdAt: {

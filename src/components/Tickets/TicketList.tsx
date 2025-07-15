@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { useTicketStore } from '../../store/ticketStore';
 import { useTeamStore } from '../../store/teamStore';
 import { 
@@ -10,7 +10,9 @@ import {
   CheckCircle,
   User,
   Filter,
-  X
+  X,
+  Search,
+  Calendar
 } from 'lucide-react';
 
 const TicketList = () => {
@@ -21,10 +23,14 @@ const TicketList = () => {
 
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     status: '',
     priority: '',
-    assignedTo: ''
+    assignedTo: '',
+    dateFilter: '',
+    startDate: '',
+    endDate: ''
   });
 
   useEffect(() => {
@@ -33,6 +39,40 @@ const TicketList = () => {
     startPolling();
     return () => stopPolling();
   }, [fetchTickets, fetchTeamMembers, startPolling, stopPolling]);
+
+  // Date filter options
+  const getDateRange = (filterType: string) => {
+    const now = new Date();
+    
+    switch (filterType) {
+      case 'today':
+        return {
+          start: startOfDay(now),
+          end: endOfDay(now)
+        };
+      case 'yesterday':
+        const yesterday = subDays(now, 1);
+        return {
+          start: startOfDay(yesterday),
+          end: endOfDay(yesterday)
+        };
+      case 'thisMonth':
+        return {
+          start: startOfMonth(now),
+          end: endOfMonth(now)
+        };
+      case 'custom':
+        if (filters.startDate && filters.endDate) {
+          return {
+            start: startOfDay(parseISO(filters.startDate)),
+            end: endOfDay(parseISO(filters.endDate))
+          };
+        }
+        return null;
+      default:
+        return null;
+    }
+  };
 
   // Filter tickets based on the current route and applied filters
   const filteredTickets = React.useMemo(() => {
@@ -43,6 +83,13 @@ const TicketList = () => {
       result = result.filter(ticket => ticket.status === 'escalated');
     } else if (location.pathname === '/tickets/new') {
       result = result.filter(ticket => ticket.status === 'new' || ticket.status === 'acknowledged');
+    }
+
+    // Search filter
+    if (searchTerm.trim()) {
+      result = result.filter(ticket => 
+        ticket.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     }
 
     // Apply additional filters
@@ -63,15 +110,52 @@ const TicketList = () => {
       }
     }
 
+    // Date filter
+    if (filters.dateFilter) {
+      const dateRange = getDateRange(filters.dateFilter);
+      if (dateRange) {
+        result = result.filter(ticket => {
+          const ticketDate = new Date(ticket.createdAt);
+          return isWithinInterval(ticketDate, { start: dateRange.start, end: dateRange.end });
+        });
+      }
+    }
+
     return result;
-  }, [tickets, location.pathname, filters]);
+  }, [tickets, location.pathname, filters, searchTerm]);
 
   const clearFilters = () => {
     setFilters({
       status: '',
       priority: '',
-      assignedTo: ''
+      assignedTo: '',
+      dateFilter: '',
+      startDate: '',
+      endDate: ''
     });
+    setSearchTerm('');
+  };
+
+  const handleDateFilterChange = (filterType: string) => {
+    setFilters(prev => ({
+      ...prev,
+      dateFilter: filterType,
+      startDate: '',
+      endDate: ''
+    }));
+  };
+
+  const handleCustomDateChange = (field: 'startDate' | 'endDate', value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value,
+      dateFilter: 'custom'
+    }));
+  };
+
+  // Get today's date in YYYY-MM-DD format for max date constraint
+  const getTodayString = () => {
+    return new Date().toISOString().split('T')[0];
   };
 
   const getStatusIcon = (status: string) => {
@@ -168,7 +252,7 @@ const TicketList = () => {
         >
           <Filter className="h-4 w-4 mr-2" />
           Filters
-          {(filters.status || filters.priority || filters.assignedTo) && (
+          {(filters.status || filters.priority || filters.assignedTo || filters.dateFilter || searchTerm) && (
             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
               Active
             </span>
@@ -176,16 +260,28 @@ const TicketList = () => {
         </button>
       </div>
 
+      {/* Search Bar */}
+      <div className="bg-white p-4 rounded-lg border border-neutral-200 shadow-sm flex items-center">
+        <Search className="h-5 w-5 text-neutral-400 mr-2" />
+        <input
+          type="text"
+          placeholder="Search by ticket number..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 outline-none text-sm"
+        />
+      </div>
+
       {/* Filter Panel */}
       {showFilters && (
-        <div className="bg-white p-4 rounded-lg border border-neutral-200 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
+        <div className="bg-white p-4 rounded-lg border border-neutral-200 shadow-sm mb-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="min-w-[180px]">
               <label className="block text-sm font-medium text-neutral-700 mb-1">Status</label>
               <select
                 value={filters.status}
                 onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="block w-full rounded-md border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                className="block w-full rounded-md border-neutral-200 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 sm:text-sm bg-neutral-50"
               >
                 <option value="">All Statuses</option>
                 <option value="new">New</option>
@@ -196,12 +292,12 @@ const TicketList = () => {
               </select>
             </div>
 
-            <div>
+            <div className="min-w-[180px]">
               <label className="block text-sm font-medium text-neutral-700 mb-1">Priority</label>
               <select
                 value={filters.priority}
                 onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-                className="block w-full rounded-md border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                className="block w-full rounded-md border-neutral-200 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 sm:text-sm bg-neutral-50"
               >
                 <option value="">All Priorities</option>
                 <option value="low">Low</option>
@@ -211,12 +307,12 @@ const TicketList = () => {
               </select>
             </div>
 
-            <div>
+            <div className="min-w-[180px]">
               <label className="block text-sm font-medium text-neutral-700 mb-1">Assigned To</label>
               <select
                 value={filters.assignedTo}
                 onChange={(e) => setFilters(prev => ({ ...prev, assignedTo: e.target.value }))}
-                className="block w-full rounded-md border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                className="block w-full rounded-md border-neutral-200 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 sm:text-sm bg-neutral-50"
               >
                 <option value="">All Assignments</option>
                 <option value="unassigned">Unassigned</option>
@@ -228,10 +324,50 @@ const TicketList = () => {
               </select>
             </div>
 
+            <div className="min-w-[180px]">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">Date Range</label>
+              <select
+                value={filters.dateFilter}
+                onChange={(e) => handleDateFilterChange(e.target.value)}
+                className="block w-full rounded-md border-neutral-200 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 sm:text-sm bg-neutral-50"
+              >
+                <option value="">All Dates</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="thisMonth">This Month</option>
+                <option value="custom">Custom Range</option>
+              </select>
+            </div>
+
+            {filters.dateFilter === 'custom' && (
+              <>
+                <div className="min-w-[180px]">
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={filters.startDate}
+                    onChange={(e) => handleCustomDateChange('startDate', e.target.value)}
+                    max={getTodayString()}
+                    className="block w-full rounded-md border-neutral-200 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 sm:text-sm bg-neutral-50"
+                  />
+                </div>
+                <div className="min-w-[180px]">
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={filters.endDate}
+                    onChange={(e) => handleCustomDateChange('endDate', e.target.value)}
+                    max={getTodayString()}
+                    className="block w-full rounded-md border-neutral-200 px-3 py-2 shadow-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 sm:text-sm bg-neutral-50"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="flex items-end">
               <button
                 onClick={clearFilters}
-                className="inline-flex items-center px-3 py-2 border border-neutral-300 rounded-md text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50"
+                className="inline-flex items-center px-4 py-2 border border-neutral-200 rounded-md text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 transition shadow-sm"
               >
                 <X className="h-4 w-4 mr-1" />
                 Clear

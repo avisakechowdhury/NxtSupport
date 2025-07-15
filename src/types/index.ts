@@ -8,6 +8,7 @@ export interface User {
   accountType?: 'business' | 'personal';
   emailConnected?: boolean;
   googleEmail?: string | null;
+  createdAt?: Date;
 }
 
 export interface Company {
@@ -22,6 +23,14 @@ export interface Company {
   googleEmail?: string | null;
 }
 
+export interface Comment {
+  _id?: string;
+  userId: string;
+  userName: string;
+  text: string;
+  createdAt: Date;
+}
+
 export interface Ticket {
   _id: string;
   id?: string;
@@ -31,30 +40,34 @@ export interface Ticket {
   body: string;
   senderEmail: string;
   senderName: string;
-  gmailMessageId?: string;
-  status: 'new' | 'acknowledged' | 'inProgress' | 'responded' | 'escalated' | 'resolved' | 'closed';
+  status: 'new' | 'acknowledged' | 'in_progress' | 'resolved' | 'closed' | 'escalated';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  assignedTo: string | null;
-  responseText: string | null;
+  gmailMessageId: string;
   aiConfidence: number;
   originalLanguage: string;
-  createdAt: string;
-  updatedAt: string;
-  responseGeneratedAt: string | null;
-  escalatedAt: string | null;
-  resolvedAt: string | null;
+  lastReplyAt: Date;
+  escalationCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  resolvedAt?: Date;
   activities?: TicketActivity[];
+  comments?: Comment[];
+  assignedTo?: string | User;
 }
 
 export interface TicketActivity {
   _id: string;
   id?: string;
   ticketId: string;
-  activityType: 'created' | 'statusChanged' | 'responded' | 'escalated' | 'assigned' | 'note';
-  userId: string | null;
-  userName: string | null;
+  activityType: 'created' | 'updated' | 'reply' | 'status_changed' | 'priority_changed' | 'assigned' | 'comment' | 'escalated' | 'resolved';
   details: string;
-  createdAt: string;
+  content?: string;
+  performedBy: string;
+  userName: string;
+  oldValue?: any;
+  newValue?: any;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface EmailConfig {
@@ -89,6 +102,7 @@ export interface TicketsState {
   escalateTicket: (id: string, reason: string) => Promise<void>;
   resolveTicket: (id: string) => Promise<void>;
   addNote: (id: string, note: string) => Promise<void>;
+  addComment: (id: string, text: string) => Promise<void>;
   generateAIResponse: (id: string) => Promise<void>;
   startPolling: () => void;
   stopPolling: () => void;

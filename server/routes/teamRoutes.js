@@ -19,7 +19,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Add new team member
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, email, role } = req.body;
+    const { name, email, role, password } = req.body;
     
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -32,7 +32,7 @@ router.post('/', authenticateToken, async (req, res) => {
       email,
       role,
       companyId: req.user.companyId,
-      password: Math.random().toString(36).slice(-8) // Generate random password
+      password: password || Math.random().toString(36).slice(-8) // Use provided password or generate random
     });
 
     await user.save();
