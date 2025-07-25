@@ -8,6 +8,7 @@ interface BusinessEmail {
   snippet: string;
   dateTime: string;
   body?: string;
+  bodyHtml?: string;
   type?: 'Complaint' | 'Normal' | string;
   isUnread?: boolean;
   ticketNumber?: string;

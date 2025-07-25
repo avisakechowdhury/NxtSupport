@@ -38,6 +38,15 @@ const ticketSchema = new mongoose.Schema({
     enum: ['general', 'technical', 'billing', 'feature', 'bug', 'account'],
     default: 'general'
   },
+  processedGmailMessageIds: {
+    type: [String],
+    default: []
+  },
+  contentHash: {
+    type: String,
+    index: true, // Index for faster lookups
+    sparse: true // Allow null values for existing tickets
+  },
   // complaintCategory: {
   //   type: mongoose.Schema.Types.ObjectId,
   //   ref: 'ComplaintCategory',
@@ -69,7 +78,8 @@ const ticketSchema = new mongoose.Schema({
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true
+      required: false,
+      default: null
     },
     userName: { type: String, required: true },
     text: { type: String, required: true },
@@ -87,6 +97,13 @@ const ticketSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 }, {
   timestamps: true
+});
+ticketSchema.index({ 
+  companyId: 1, 
+  contentHash: 1, 
+  createdAt: -1 
+}, { 
+  sparse: true 
 });
 
 // Generate public token before saving

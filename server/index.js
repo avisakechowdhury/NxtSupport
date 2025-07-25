@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
-import EmailListener from './services/emailListener.js'; // Business email listener service
+// import EmailListener from './services/emailListener.js'; // Business email listener service
 
 // Load environment variables
 dotenv.config();

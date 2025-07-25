@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, AlertCircle, RefreshCw, Inbox, Loader2, Power, User as UserIcon } from 'lucide-react';
+import { Mail, AlertCircle, RefreshCw, Inbox, Loader2, Power, User as UserIcon, CornerUpLeft } from 'lucide-react';
 import axios, { AxiosError } from 'axios';
 import { useBusinessEmailStore } from '../../store/businessEmailStore';
 import { useNavigate } from 'react-router-dom';
@@ -122,6 +122,8 @@ interface Email {
   isUnread?: boolean;
   ticketNumber?: string; // Added field
   acknowledged?: boolean; // Added field
+  isReply?: boolean; // Added field
+  replyToTicketNumber?: string; // Added field
 }
 
 interface FetchEmailsResponse {
@@ -152,7 +154,7 @@ const EmailConnector: React.FC = () => {
   const {
     emails,
     isLoading,
-    error,
+    error = '',
     page,
     nextPageToken,
     pageSize,
@@ -165,10 +167,80 @@ const EmailConnector: React.FC = () => {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const navigate = useNavigate();
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3000/api';
 
   // console.log(API_BASE_URL, 'Api Base URL')
+
+  // Handler for Google Sign-In
+  const handleGoogleSignIn = async () => {
+    console.log('handleGoogleSignIn called');
+    console.log('company:', company);
+    console.log('token:', token);
+    if (!token) {
+      setConnectError('Please log in to authenticate with Google.');
+      return;
+    }
+    if (!company?.id) {
+      setConnectError('Company ID is missing. Please reload the page or contact support.');
+      return;
+    }
+    setIsConnectingGoogle(true);
+    setConnectError('');
+    try {
+      const response = await axios.get<{ authorizeUrl: string }>(
+        `${API_BASE_URL}/auth/google/initiate`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { companyId: company.id },
+        }
+      );
+      const { authorizeUrl } = response.data;
+      console.log('authorizeUrl received from backend:', authorizeUrl);
+      if (authorizeUrl) {
+        window.location.href = authorizeUrl;
+      } else {
+        throw new Error('No authorizeUrl received from backend');
+      }
+    } catch (err) {
+      const error = err as AxiosError;
+      setConnectError(error.response?.data?.error || 'Could not start Google Sign-In.');
+      setIsConnectingGoogle(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    if (company?.googleAuthConnected && token) {
+      fetchEmails(true); // Always force fetch latest emails
+    }
+  };
+
+  const handleGoogleDisconnect = async () => {
+    if (!token) return;
+    if (!window.confirm('Are you sure you want to disconnect your Google account?')) return;
+    setIsDisconnecting(true);
+    try {
+      await axios.post(`${API_BASE_URL}/auth/google/disconnect`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCompanyAuthStatus({ googleAuthConnected: false, googleEmail: null, emailConnectedOverall: false });
+      clearEmails();
+      setConnectError('Google account disconnected successfully.');
+    } catch (err) {
+      setConnectError('Failed to disconnect Google account.');
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
+  const handlePrevPage = () => {
+    // TODO: Implement previous page logic
+    alert('Previous page not implemented yet.');
+  };
+  const handleNextPage = () => {
+    // TODO: Implement next page logic
+    alert('Next page not implemented yet.');
+  };
 
   useEffect(() => {
     if (company) {
@@ -185,121 +257,18 @@ const EmailConnector: React.FC = () => {
     }
   }, [company]);
 
-  // On mount: if emails already exist, trigger a refresh (show spinner on refresh button, keep emails visible)
+  // Only keep this useEffect for fetching emails
   useEffect(() => {
     if (company?.googleAuthConnected && token) {
-      fetchEmails(false);
+      fetchEmails(true);
     }
   }, [company?.googleAuthConnected, token]);
 
-  // Pagination handlers
-  const handleNextPage = () => {
-    if (nextPageToken) {
-      fetchEmails(false, page + 1, nextPageToken);
-    }
-  };
-  const handlePrevPage = () => {
-    if (page > 1) {
-      fetchEmails(false, page - 1, undefined);
-    }
-  };
-  const handleRefresh = () => {
-    fetchEmails(false);
-  };
+  useEffect(() => {
+    console.log('Company data updated:', company);
+  }, [company]);
 
-
-const handleGoogleSignIn = async () => {
-  if (!token) {
-    setConnectError('Please log in to authenticate with Google.');
-    return;
-  }
-  if (!company?.id) {
-    setConnectError('Company ID is missing. Please reload the page or contact support.');
-    return;
-  }
-  setIsConnectingGoogle(true);
-  setConnectError('');
-  try {
-    // console.log('API_BASE_URL:', API_BASE_URL);
-    const response = await axios.get<{ authorizeUrl: string }>(
-      `${API_BASE_URL}/auth/google/initiate`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { companyId: company.id }, // Pass companyId as a query parameter
-      }
-    );
-    const { authorizeUrl } = response.data;
-    // console.log('authorizeUrl:', authorizeUrl);
-    if (authorizeUrl) {
-      window.location.href = authorizeUrl;
-    } else {
-      throw new Error('No authorizeUrl received from backend');
-    }
-  } catch (err) {
-    const error = err as AxiosError;
-    console.error('Google Sign-in failed:', error.response?.data || error.message);
-    setConnectError(error.response?.data?.error || 'Could not start Google Sign-In.');
-    setIsConnectingGoogle(false);
-  }
-};
-
-
-
-  const handleGoogleDisconnect = async () => {
-    if (!token) {
-        setConnectError("User not authenticated.");
-        return;
-    }
-    setIsConnectingGoogle(true);
-    setConnectError('');
-    try {
-        // console.log("handleGoogleDisconnect: Initiating disconnect.");
-        await axios.post(`${API_BASE_URL}/auth/google/disconnect`, {}, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        // console.log("handleGoogleDisconnect: Successfully disconnected on backend.");
-        setCompanyAuthStatus({ googleAuthConnected: false, googleEmail: null, emailConnectedOverall: false }); 
-        clearEmails();
-        // await fetchCompanyData(); // Re-fetch to confirm, or rely on setCompanyAuthStatus
-    } catch (err) {
-        const error = err as AxiosError<ApiError>;
-        console.error('handleGoogleDisconnect: Failed to disconnect Google account:', error.response?.data || error.message);
-        setConnectError(error.response?.data?.error || 'Failed to disconnect. Please try again.');
-    } finally {
-        setIsConnectingGoogle(false);
-    }
-  };
-
-  const handleEmailClick = (email: Email) => {
-    setSelectedEmail(email);
-    setShowEmailModal(true);
-  };
-
-  const renderEmailBody = (body: string) => {
-    // Simple HTML rendering for email content
-    return (
-      <div 
-        className="prose prose-sm max-w-none"
-        dangerouslySetInnerHTML={{ __html: body }}
-      />
-    );
-  };
-
-  const markAsUnread = async (emailId: string) => {
-    try {
-      await axios.post(`${API_BASE_URL}/auth/google/mark-unread`, { messageId: emailId }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // Update local store (set isUnread to true)
-      useBusinessEmailStore.setState(state => ({
-        emails: state.emails.map(e => e.id === emailId ? { ...e, isUnread: true } : e)
-      }));
-      setShowEmailModal(false);
-    } catch (err) {
-      alert('Failed to mark as unread.');
-    }
-  };
-
+  // Show loading spinner only if company is null (still loading)
   if (!company) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -309,6 +278,41 @@ const handleGoogleSignIn = async () => {
     );
   }
 
+  // If company is loaded but not connected, show connect UI
+  if (!company.googleAuthConnected || !company.googleEmail) {
+    return (
+      <div className="bg-white shadow-xl rounded-lg overflow-hidden w-full max-w-4xl mx-auto">
+        <div className="p-8">
+          <div className="flex items-center mb-6">
+              <Mail className="h-8 w-8 text-primary-600 mr-3" />
+              <h3 className="text-2xl font-semibold text-neutral-900">Connect Your Support Email</h3>
+          </div>
+          {connectError && (
+            <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+              <AlertCircle className="h-5 w-5 text-red-500 inline mr-2" /> {connectError}
+            </div>
+          )}
+          <div className="mt-4">
+              <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isConnectingGoogle}
+                  className="w-full inline-flex justify-center items-center py-2.5 px-4 border border-neutral-300 rounded-md shadow-sm bg-white text-sm font-medium text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60"
+              >
+                  {isConnectingGoogle ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : 
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png" alt="Google" className="w-5 h-5 mr-2"/>}
+                  Sign in with Google
+              </button>
+              <p className="mt-2 text-xs text-neutral-500">
+                Connect your Gmail or Google Workspace account securely using OAuth 2.0.
+              </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If connected, show the connected UI
   if (company.googleAuthConnected && company.googleEmail) {
     return (
       <>
@@ -337,9 +341,9 @@ const handleGoogleSignIn = async () => {
                   type="button"
                   className="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
                   onClick={handleGoogleDisconnect}
-                  disabled={isConnectingGoogle}
+                  disabled={isConnectingGoogle || isDisconnecting}
                 >
-                  {isConnectingGoogle ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Power className="h-5 w-5 mr-2 text-red-500" />}
+                  {isConnectingGoogle || isDisconnecting ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Power className="h-5 w-5 mr-2 text-red-500" />}
                   Disconnect Google
                 </button>
               </div>
@@ -383,8 +387,7 @@ const handleGoogleSignIn = async () => {
                     >
                       <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
                         <div
-                          className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-lg select-none"
-                          style={{ background: stringToColor(email.from || email.subject || 'N') }}
+                          className="h-10 w-10 rounded-full flex items-center justify-center bg-black text-white font-bold text-lg select-none"
                         >
                           {((email.from || email.subject || 'N').trim().charAt(0).toUpperCase())}
                         </div>
@@ -394,10 +397,21 @@ const handleGoogleSignIn = async () => {
                           <span className={`font-semibold truncate ${email.isUnread ? 'text-blue-700' : 'text-neutral-900'}`}>{email.subject}</span>
                           <span className="text-xs text-neutral-500 ml-2 whitespace-nowrap">{new Date(email.dateTime).toLocaleString()}</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <span className="text-xs text-neutral-600 truncate max-w-xs">{email.snippet}</span>
+                        {email.isReply && email.replyToTicketNumber && (
+                          <span className="flex items-center ml-2 px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">
+                            <CornerUpLeft className="h-4 w-4 mr-1" /> Reply to Ticket #{email.replyToTicketNumber}
+                          </span>
+                        )}
                           {email.isUnread && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Unread</span>}
-                    </div>
+                        {email.acknowledged && (
+                          <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Acknowledged</span>
+                        )}
+                        {email.ticketNumber && (
+                          <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full">Ticket: {email.ticketNumber}</span>
+                        )}
+                      </div>
                       </div>
                   </li>
                 ))}

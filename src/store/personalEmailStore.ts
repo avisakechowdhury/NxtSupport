@@ -11,6 +11,7 @@ interface PersonalEmail {
   isRead: boolean;
   isStarred: boolean;
   labels: string[];
+  bodyHtml?: string;
 }
 
 interface EmailStats {

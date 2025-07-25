@@ -21,6 +21,7 @@
     "@vercel/analytics": "^1.5.0",
     "axios": "^1.6.7",
     "chart.js": "^4.4.1",
+    "crypto": "^1.0.1",
     "date-fns": "^3.3.1",
     "lucide-react": "^0.344.0",
     "mini-svg-data-uri": "^1.4.4",
